@@ -68,8 +68,10 @@ export function ModItem({
 	const { mutate: toggleMod, isPending: isToggling } = useToggleMod(
 		installation?.path ?? "",
 	);
+
+	// FIX: On ajoute .toString() pour correspondre au type string[]
 	const isCurrentlyDisabled = installedMod
-		? disabledMods?.includes(installedMod.modid)
+		? disabledMods?.includes(installedMod.modid.toString())
 		: false;
 
 	const { data: modInfo } = useQuery({
@@ -251,7 +253,11 @@ export function ModItem({
 							disabled={isToggling}
 							id={`toggle-${mod.modid}`}
 							onCheckedChange={(checked) => {
-								toggleMod({ enable: checked, modid: installedMod.modid });
+								// FIX: On ajoute .toString() pour correspondre à l'attente du type string
+								toggleMod({
+									enable: checked,
+									modid: installedMod.modid.toString(),
+								});
 							}}
 						/>
 						<Label
