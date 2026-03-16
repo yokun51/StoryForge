@@ -5,9 +5,8 @@ import type { QueryClient } from "@tanstack/react-query";
 import { ReactQueryDevtoolsPanel } from "@tanstack/react-query-devtools";
 import { createRootRouteWithContext, Outlet } from "@tanstack/react-router";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
-import { relaunch } from "@tauri-apps/plugin-process";
 import * as React from "react";
-import { Toaster, toast } from "sonner";
+import { Toaster } from "sonner";
 import { AddInstallationDialog } from "@/components/dialogs/addinstallation.dialog";
 import { AddModDialog } from "@/components/dialogs/addmod.dialog";
 import { AddServerDialog } from "@/components/dialogs/addserver.dialog";
@@ -28,7 +27,6 @@ import { RemoveModDialog } from "@/components/dialogs/removemod.dialog";
 import { UpdateModDialog } from "@/components/dialogs/updatemod.dialog";
 import { ViewMapDialog } from "@/components/dialogs/viewmap.dialog";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { useUpdater } from "@/hooks/use-updater";
 import { type DialogMap, useDialogStore } from "@/stores/dialogs";
 import { useSettingsStore } from "@/stores/settings";
 
@@ -42,58 +40,6 @@ function RootComponent() {
 	// Stores
 	const { active } = useDialogStore();
 	const { darkMode } = useSettingsStore();
-
-	// Queries
-	const { data: update } = useUpdater();
-
-	// Effects
-	React.useEffect(() => {
-		if (update) {
-			let downloaded: number = 0;
-			let contentLength: number | undefined = 0;
-			toast("A new update is available!", {
-				action: {
-					label: "Install",
-					onClick: () =>
-						update.downloadAndInstall((event) => {
-							switch (event.event) {
-								case "Started":
-									contentLength = event.data.contentLength;
-									toast.info("Updating", {
-										description: "Starting download...",
-										id: "updater",
-									});
-									break;
-								case "Progress":
-									downloaded = event.data.chunkLength;
-									toast.info("Updating", {
-										description: `Downloaded ${downloaded} of ${contentLength} bytes`,
-										id: "updater",
-									});
-									break;
-								case "Finished":
-									toast.success("Updated", {
-										description: "The application will restart now.",
-										id: "updater",
-									});
-									setTimeout(() => {
-										relaunch();
-									}, 2500);
-									break;
-							}
-						}),
-				},
-				cancel: {
-					label: "Not now",
-					onClick: () => toast.dismiss("update-available"),
-				},
-				description: `Version ${update.version} is available.`,
-				dismissible: true,
-				duration: Number.POSITIVE_INFINITY,
-				id: "update-available",
-			});
-		}
-	}, [update]);
 
 	return (
 		<React.Fragment>
