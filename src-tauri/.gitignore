@@ -8,3 +8,4 @@
 
 # ZIP Files
 src-tauri/resources/*.zip
+resources/*.zip
