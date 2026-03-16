@@ -65,6 +65,7 @@ pub fn run() {
             installations::move_installations_folder,
             installations::remove_all_installations,
             installations::rename_installations_folder,
+            installations::duplicate_installations_folder,
             // Servers
             servers::fetch_public_servers,
             servers::fetch_all_servers,

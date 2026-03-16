@@ -1,6 +1,7 @@
 import type { ContextMenu as ContextMenuPrimitive } from "@base-ui/react/context-menu";
 import { useNavigate } from "@tanstack/react-router";
 import {
+	CopyIcon,
 	DownloadCloudIcon,
 	FileUpIcon,
 	FolderOpenIcon,
@@ -131,6 +132,15 @@ export const InstallationContextMenu = ({
 					>
 						Edit
 						<FolderPenIcon className="inline-block h-4 w-4" />
+					</ContextMenuItem>
+					<ContextMenuItem
+						className="flex items-center justify-between gap-4"
+						onClick={() =>
+							openDialog("DuplicateInstallationDialog", { installation })
+						}
+					>
+						Duplicate
+						<CopyIcon className="inline-block h-4 w-4" />
 					</ContextMenuItem>
 					<ContextMenuItem
 						className="flex items-center justify-between gap-4"

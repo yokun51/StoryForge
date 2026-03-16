@@ -126,13 +126,18 @@ function Dashboard() {
 															viewTransition: { types: ["warp"] },
 														})
 													}
+													onDuplicate={(i) =>
+														openDialog("DuplicateInstallationDialog", {
+															installation: i,
+														})
+													}
 													onEdit={(i) =>
 														openDialog("EditInstallationDialog", {
 															installation: i,
 														})
 													}
 													onPlay={(i) => playWithInstallation({ id: i.id })}
-													onUnfavorite={(i) => toggleFavoriteInstallation(i.id)}
+													onUnfavorite={(i) => toggleFavoriteInstallation(i.id)} // <--- AJOUTER CECI
 												/>
 											</MotionInstallationContextMenu>
 										))}

@@ -18,6 +18,7 @@ import { DeleteInstallationDialog } from "@/components/dialogs/deleteinstallatio
 import { DeleteServerDialog } from "@/components/dialogs/deleteserver.dialog";
 import { DeleteVersionDialog } from "@/components/dialogs/deleteversion.dialog";
 import { DeleteWorldDialog } from "@/components/dialogs/deleteworld.dialog";
+import { DuplicateInstallationDialog } from "@/components/dialogs/duplicateinstallation.dialog";
 import { EditInstallationDialog } from "@/components/dialogs/editinstallation.dialog";
 import { EditServerDialog } from "@/components/dialogs/editserver.dialog";
 import { EditWorldDialog } from "@/components/dialogs/editworld.dialog";
@@ -233,6 +234,14 @@ function RootComponent() {
 					{...((active?.key === "ViewMapDialog"
 						? active.props
 						: {}) as DialogMap["ViewMapDialog"])}
+				/>
+			)}
+			{active?.key === "DuplicateInstallationDialog" && (
+				<DuplicateInstallationDialog
+					open={active?.key === "DuplicateInstallationDialog"}
+					{...((active?.key === "DuplicateInstallationDialog"
+						? active.props
+						: {}) as DialogMap["DuplicateInstallationDialog"])}
 				/>
 			)}
 			<Toaster richColors theme={darkMode ? "dark" : "light"} />

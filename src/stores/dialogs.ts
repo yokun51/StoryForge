@@ -7,6 +7,7 @@ import type { DeleteInstallationDialogProps } from "@/components/dialogs/deletei
 import type { DeleteServerDialogProps } from "@/components/dialogs/deleteserver.dialog";
 import type { DeleteVersionDialogProps } from "@/components/dialogs/deleteversion.dialog";
 import type { DeleteWorldDialogProps } from "@/components/dialogs/deleteworld.dialog";
+import type { DuplicateInstallationDialogProps } from "@/components/dialogs/duplicateinstallation.dialog";
 import type { EditInstallationDialogProps } from "@/components/dialogs/editinstallation.dialog";
 import type { EditServerDialogProps } from "@/components/dialogs/editserver.dialog";
 import type { EditWorldDialogProps } from "@/components/dialogs/editworld.dialog";
@@ -32,6 +33,7 @@ export type DialogMap = {
 	EditWorldDialog: EditWorldDialogProps;
 	DeleteWorldDialog: DeleteWorldDialogProps;
 	ViewMapDialog: ViewMapDialogProps;
+	DuplicateInstallationDialog: DuplicateInstallationDialogProps;
 };
 
 type DialogKey = keyof DialogMap;

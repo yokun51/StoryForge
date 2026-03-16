@@ -1,6 +1,7 @@
 import { useRouter } from "@tanstack/react-router";
 import { formatDistanceToNow } from "date-fns";
 import {
+	CopyIcon,
 	DownloadCloudIcon,
 	FileUpIcon,
 	FolderOpenIcon,
@@ -247,6 +248,33 @@ export function InstallationRow({ installation }: InstallationRowProps) {
 						}
 					/>
 					<TooltipContent>Export</TooltipContent>
+				</Tooltip>
+				<GroupSeparator />
+				<Tooltip>
+					<TooltipTrigger
+						render={
+							<GroupItem
+								render={
+									<Button
+										onClick={() =>
+											openDialog("DuplicateInstallationDialog", {
+												installation,
+											})
+										}
+										size="icon"
+										variant="outline"
+									/>
+								}
+							>
+								<CopyIcon
+									aria-hidden="true"
+									className="-ms-1 opacity-60"
+									size={16}
+								/>
+							</GroupItem>
+						}
+					/>
+					<TooltipContent>Duplicate</TooltipContent>
 				</Tooltip>
 				<GroupSeparator />
 				<Tooltip>

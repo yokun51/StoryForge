@@ -545,3 +545,37 @@ pub async fn remove_all_installations(source: String, subdir: String) -> Result<
     })?;
     Ok("removed".into())
 }
+
+#[command]
+pub async fn duplicate_installations_folder(
+    app: AppHandle,
+    source: String,
+    new_name: String,
+    old_safe_name: String,
+) -> Result<String, UiError> {
+    let subdir = crate::modules::utils::installations_subdir(app.clone());
+    let parent_path = std::path::PathBuf::from(source).join(&subdir);
+    let source_path = parent_path.join(&old_safe_name);
+    let destination_path = parent_path.join(&new_name);
+
+    if destination_path.exists() {
+        return Err(UiError {
+            name: "already_exists".into(),
+            message: "Destination directory already exists".into(),
+        });
+    }
+
+    std::fs::create_dir_all(&destination_path).map_err(|e| UiError {
+        name: "create_dir_failed".into(),
+        message: format!("Failed to create directory: {e}"),
+    })?;
+
+    let mut options = fs_extra::dir::CopyOptions::new();
+    options.content_only = true;
+    fs_extra::dir::copy(&source_path, &destination_path, &options).map_err(|e| UiError {
+        name: "copy_failed".into(),
+        message: format!("Failed to copy directory: {e}"),
+    })?;
+
+    Ok(destination_path.to_string_lossy().into_owned())
+}

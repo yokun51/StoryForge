@@ -1,5 +1,6 @@
 import { formatDistanceToNow } from "date-fns";
 import {
+	CopyIcon,
 	DownloadCloudIcon,
 	PackagePlusIcon,
 	Pencil,
@@ -24,6 +25,7 @@ interface InstallationCardProps {
 	onUnfavorite: (installation: Installation) => void;
 	onEdit: (installation: Installation) => void;
 	onAddMods: (installation: Installation) => void;
+	onDuplicate: (installation: Installation) => void;
 }
 
 export function InstallationCard({
@@ -158,6 +160,26 @@ export function InstallationCard({
 						}
 					/>
 					<TooltipContent>Edit {installation.name}</TooltipContent>
+				</Tooltip>
+				<Tooltip>
+					<TooltipTrigger
+						render={
+							<GroupItem
+								render={
+									<Button
+										className="h-8 w-8 text-muted-foreground hover:text-foreground"
+										onClick={() => onDuplicate(installation)}
+										size="icon"
+										variant="ghost"
+									/>
+								}
+							>
+								<CopyIcon className="h-4 w-4" />
+								<span className="sr-only">Duplicate {installation.name}</span>
+							</GroupItem>
+						}
+					/>
+					<TooltipContent>Duplicate {installation.name}</TooltipContent>
 				</Tooltip>
 				<Tooltip>
 					<TooltipTrigger
