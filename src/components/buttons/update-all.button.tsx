@@ -10,8 +10,11 @@ import {
 	type ModUpdatesResponse,
 	modUpdatesQueryKey,
 } from "@/hooks/use-mod-updates";
+import type { ModInfo } from "@/lib/types";
+import { compareSemverAsc, getTargetRelease } from "@/lib/utils";
 import type { OutputMod } from "@/routes/install-mods/$id";
 import type { Installation } from "@/stores/installations";
+import { useModsFilters } from "@/stores/modsFilters";
 
 export const UpdateAllButton = ({
 	installation,
@@ -25,6 +28,10 @@ export const UpdateAllButton = ({
 	const emitevent = `mod-updates-${installation?.id}-progress`;
 	const queryClient = useQueryClient();
 	const [wantsToUpdate, setWantsToUpdate] = useState(false);
+	const { targetUpdateVersion } = useModsFilters();
+	const actualTargetVersion =
+		targetUpdateVersion || (installation?.version ?? "");
+
 	const { mutateAsync: removeModFromInstallation, isPending: removePending } =
 		useMutation({
 			mutationFn: (variables: {
@@ -37,7 +44,7 @@ export const UpdateAllButton = ({
 				}),
 			onError: (error, variables) => {
 				toast.error(
-					`Error removing ${name} from ${installation.name}: ${error.message}`,
+					`Error removing mod from ${installation.name}: ${error.message}`,
 					{
 						id: `mod-remove-${variables.path}-${variables.modpath}`,
 					},
@@ -68,10 +75,11 @@ export const UpdateAllButton = ({
 
 	const handleUpdateAll = async () => {
 		if (wantsToUpdate) {
-			// Trigger update process for all installed mods with updates
-			toast.loading("Downloading mod updates...", {
+			toast.loading("Checking for compatible updates...", {
 				id: `mod-updates-${installation.id}`,
 			});
+			let updatedCount = 0;
+
 			for (const [modid, updateMod] of Object.entries(updates.updates)) {
 				const isInstalled = installedMods?.find(
 					(instMod) =>
@@ -79,17 +87,34 @@ export const UpdateAllButton = ({
 						instMod.modid.toString() === updateMod.modidstr,
 				);
 				if (!isInstalled) continue;
-				toast.loading(`Updating ${isInstalled.name}...`, {
-					id: `mod-updates-${installation.id}`,
-				});
-				await removeModFromInstallation({
-					modpath: isInstalled.path,
-					path: installation.path,
-					updateMod: {
-						...updateMod,
-						modid: modid,
-					},
-				});
+
+				const modInfo = (await invoke("fetch_mod_info", {
+					modid: modid,
+				})) as ModInfo;
+				const targetRelease = getTargetRelease(
+					modInfo.mod.releases,
+					actualTargetVersion,
+				);
+
+				if (
+					targetRelease &&
+					compareSemverAsc(targetRelease.modversion, isInstalled.version) > 0
+				) {
+					updatedCount++;
+					toast.loading(`Updating ${isInstalled.name}...`, {
+						id: `mod-updates-${installation.id}`,
+					});
+					await removeModFromInstallation({
+						modpath: isInstalled.path,
+						path: installation.path,
+						updateMod: {
+							...updateMod,
+							mainfile: targetRelease.mainfile,
+							modid: modid,
+							modversion: targetRelease.modversion,
+						},
+					});
+				}
 			}
 			await queryClient.invalidateQueries({
 				queryKey: installedModsQueryKey(installation.path),
@@ -97,10 +122,22 @@ export const UpdateAllButton = ({
 			await queryClient.invalidateQueries({
 				queryKey: modUpdatesQueryKey(installation.id),
 			});
-			toast.success(`All mod updates completed for ${installation.name}.`, {
-				id: `mod-updates-${installation.id}`,
-			});
-			// Reset the wantsToUpdate state
+
+			if (updatedCount > 0) {
+				toast.success(
+					`Successfully updated ${updatedCount} mod(s) for ${installation.name}.`,
+					{
+						id: `mod-updates-${installation.id}`,
+					},
+				);
+			} else {
+				toast.success(
+					`All mods are already up to date for ${actualTargetVersion}.`,
+					{
+						id: `mod-updates-${installation.id}`,
+					},
+				);
+			}
 			setWantsToUpdate(false);
 		} else {
 			setWantsToUpdate(true);

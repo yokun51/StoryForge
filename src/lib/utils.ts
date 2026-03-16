@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { twMerge } from "tailwind-merge";
 import type { OutputMod } from "@/routes/install-mods/$id";
 import type { Installation } from "@/stores/installations";
+import type { Release } from "./types";
 
 export function cn(...inputs: ClassValue[]) {
 	return twMerge(clsx(inputs));
@@ -174,3 +175,16 @@ export const itemVariants = {
 		y: 0,
 	}),
 };
+
+/**
+ * Trouve la version la plus récente d'un mod qui est <= à la version du jeu ciblée.
+ */
+export function getTargetRelease(
+	releases: Release[],
+	targetGameVersion: string,
+): Release | undefined {
+	return releases.find((release) =>
+		// On accepte la release si au moins un de ses tags (versions compatibles) est <= à la targetGameVersion
+		release.tags.some((tag) => compareSemverAsc(tag, targetGameVersion) <= 0),
+	);
+}

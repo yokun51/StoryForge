@@ -29,6 +29,8 @@ export type ModsFilters = {
 	setSide: (side: ModsFilters["side"]) => void;
 	category: "mod" | "externaltool" | "other";
 	setCategory: (category: ModsFilters["category"]) => void;
+	targetUpdateVersion: string;
+	setTargetUpdateVersion: (version: string) => void;
 };
 
 export const useModsFilters = create<ModsFilters>()((set) => ({
@@ -65,6 +67,8 @@ export const useModsFilters = create<ModsFilters>()((set) => ({
 	setSearchText: (text) => set({ searchText: text }),
 	setSide: (side) => set({ side }),
 	setSortBy: (key) => set({ sortBy: key }),
+	setTargetUpdateVersion: (version) => set({ targetUpdateVersion: version }),
 	side: "any",
 	sortBy: "trending",
+	targetUpdateVersion: "",
 }));

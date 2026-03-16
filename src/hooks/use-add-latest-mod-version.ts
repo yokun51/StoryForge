@@ -5,7 +5,9 @@ import { useRef } from "react";
 import { toast } from "sonner";
 import type { Mod } from "@/components/lists/mod.list";
 import type { ModInfo, ProgressPayload } from "@/lib/types";
+import { getTargetRelease } from "@/lib/utils";
 import type { Installation } from "@/stores/installations";
+import { useModsFilters } from "@/stores/modsFilters";
 import { installedModsQueryKey } from "./use-installed-mods";
 import { modUpdatesQueryKey } from "./use-mod-updates";
 
@@ -16,19 +18,28 @@ export const useAddLatestModVersion = ({
 	mod: Mod;
 	installation: Installation | null;
 }) => {
+	const { targetUpdateVersion } = useModsFilters();
 	const emitevent = `mod-download-${mod.modid}-${installation?.id}`;
 	const queryClient = useQueryClient();
 	const listenRef = useRef<UnlistenFn>(null);
+
 	return useMutation({
 		mutationFn: async ({ path }: { path: string }) => {
 			const modInfo = (await invoke("fetch_mod_info", {
 				modid: mod.modid.toString(),
 			})) as ModInfo;
+
+			const actualTargetVersion =
+				targetUpdateVersion || (installation?.version ?? "");
+			const targetRelease =
+				getTargetRelease(modInfo.mod.releases, actualTargetVersion) ||
+				modInfo.mod.releases[0];
+
 			(await invoke("download_and_maybe_extract", {
 				destpath: path,
 				emitevent,
 				extract: false,
-				url: modInfo.mod.releases[0]?.mainfile,
+				url: targetRelease?.mainfile,
 			})) as string;
 			return { modInfo };
 		},

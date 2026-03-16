@@ -27,7 +27,6 @@ export const Route = createFileRoute("/install-mods/$id")({
 	component: RouteComponent,
 	errorComponent: ErrorComponent,
 	loader: async ({ params }) => {
-		// Find the installation by ID in the store
 		const installation = useInstallationsStore
 			.getState()
 			.installations.find((inst) => inst.id === Number(params.id));
@@ -69,18 +68,6 @@ function RouteComponent() {
 	const { data: instMods } = useInstalledMods(installation.path, {
 		staleTime: Infinity,
 	});
-	const { data: modUpdates } = useModUpdates(
-		{
-			installationId: installation.id,
-			params:
-				instMods?.mods?.map((mod) => `${mod.modid}@${mod.version}`).join(",") ??
-				"",
-		},
-		{
-			enabled: !!instMods?.mods?.length,
-			staleTime: Infinity,
-		},
-	);
 
 	const {
 		selectedGameVersions,
@@ -100,17 +87,29 @@ function RouteComponent() {
 		category,
 		setCategory,
 		side,
+		targetUpdateVersion,
+		setTargetUpdateVersion,
 	} = useModsFilters();
+
+	const actualTargetVersion = targetUpdateVersion || installation.version;
+
+	const { data: modUpdates } = useModUpdates(
+		{
+			installationId: installation.id,
+			params:
+				instMods?.mods?.map((mod) => `${mod.modid}@${mod.version}`).join(",") ??
+				"",
+		},
+		{
+			enabled: !!instMods?.mods?.length,
+			staleTime: Infinity,
+		},
+	);
 
 	const parentRef = useRef<HTMLDivElement>(null);
 
 	return (
-		<div
-			className="flex flex-col gap-2 w-full"
-			style={{
-				height: "100vh",
-			}}
-		>
+		<div className="flex flex-col gap-2 w-full" style={{ height: "100vh" }}>
 			<div className="flex gap-2 flex-wrap items-center h-fit sticky top-0 bg-background/10 backdrop-blur-md z-10 px-4 py-2">
 				<SearchInput
 					className="h-9"
@@ -251,6 +250,30 @@ function RouteComponent() {
 					value={author}
 				/>
 				<SideToggleGroup />
+
+				{/* SÉLECTEUR TARGET VERSION (Toujours visible) */}
+				<div className="group relative">
+					<Label className="bg-background text-muted-foreground pointer-events-none absolute start-1 top-0 z-10 block -translate-y-1/2 px-2 text-xs font-medium group-has-disabled:opacity-50">
+						Target Version
+					</Label>
+					<Select
+						onValueChange={(value) => setTargetUpdateVersion(value ?? "")}
+						value={actualTargetVersion}
+					>
+						<SelectTrigger className="w-32 h-9">
+							{actualTargetVersion}
+						</SelectTrigger>
+						<SelectContent align="start" alignItemWithTrigger={false}>
+							{gameVersions?.sort(compareSemverDesc).map((version) => (
+								<SelectItem key={version} value={version}>
+									{version}
+								</SelectItem>
+							))}
+						</SelectContent>
+					</Select>
+				</div>
+
+				{/* BOUTON UPDATE ALL (Visible uniquement dans "Installed") */}
 				{side === "installed" && modUpdates && instMods && (
 					<UpdateAllButton
 						installation={installation}

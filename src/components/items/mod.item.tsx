@@ -26,7 +26,12 @@ import {
 	modUpdatesQueryKey,
 } from "@/hooks/use-mod-updates";
 import type { ModInfo, ProgressPayload } from "@/lib/types";
-import { cn, compareSemverAsc, pathDelimiter } from "@/lib/utils";
+import {
+	cn,
+	compareSemverAsc,
+	getTargetRelease,
+	pathDelimiter,
+} from "@/lib/utils";
 import type { OutputMod } from "@/routes/install-mods/$id";
 import { useDialogStore } from "@/stores/dialogs";
 import type { Installation } from "@/stores/installations";
@@ -54,6 +59,7 @@ export function ModItem({
 		modUpdates?.updates[mod.modid.toString()] ??
 		modUpdates?.updates[mod.assetid.toString()] ??
 		modUpdates?.updates[mod.urlalias ?? ""];
+
 	const { data: modInfo } = useQuery({
 		enabled: !!updateMod,
 		queryFn: () =>
@@ -66,18 +72,34 @@ export function ModItem({
 		refetchOnReconnect: false,
 		refetchOnWindowFocus: false,
 	});
+
+	const { openDialog } = useDialogStore();
+	const { setAuthor, targetUpdateVersion } = useModsFilters();
+
+	// LOGIQUE INTELLIGENTE DE FILTRAGE
+	const actualTargetVersion =
+		targetUpdateVersion || (installation?.version ?? "");
+	const targetRelease = modInfo
+		? getTargetRelease(modInfo.mod.releases, actualTargetVersion)
+		: undefined;
+	const hasValidUpdate =
+		targetRelease &&
+		installedMod &&
+		compareSemverAsc(targetRelease.modversion, installedMod.version) > 0;
+
 	const { mutate: downloadLatestModVersion, isPending: isDownloading } =
 		useAddLatestModVersion({
 			installation,
 			mod,
 		});
+
 	const { mutate: removeModFromInstallation, isPending: removePending } =
 		useMutation({
 			mutationFn: ({ path, modpath }: { path: string; modpath: string }) =>
 				invoke("remove_mod_from_installation", { params: { modpath, path } }),
 			onError: (error, variables) => {
 				toast.error(
-					`Error removing ${name} from ${installation?.name}: ${error.message}`,
+					`Error removing mod from ${installation?.name}: ${error.message}`,
 					{
 						id: `mod-remove-${variables.path}-${variables.modpath}`,
 					},
@@ -86,10 +108,11 @@ export function ModItem({
 			onSuccess: () => {
 				addModToInstallation({
 					path: `${installation?.path}${pathDelimiter}Mods`,
-					url: updateMod?.mainfile || "",
+					url: targetRelease?.mainfile || updateMod?.mainfile || "",
 				});
 			},
 		});
+
 	const { mutate: addModToInstallation, isPending } = useMutation({
 		mutationFn: ({ path, url }: { path: string; url: string }) =>
 			invoke("download_and_maybe_extract", {
@@ -100,14 +123,14 @@ export function ModItem({
 			}) as Promise<string>,
 		onError: (error) => {
 			toast.error(
-				`Error ${installedMod && updateMod && updateMod?.modversion > installedMod?.version ? "upgrading" : "downgrading"} ${modInfo?.mod.name} to ${installation?.name}: ${error.message}`,
+				`Error upgrading/downgrading ${modInfo?.mod.name} to ${installation?.name}: ${error.message}`,
 				{ id: `add-mod-${modInfo?.mod.modid}-${installation?.id}` },
 			);
 			listenRef.current?.();
 		},
 		onMutate: async () => {
 			toast.loading(
-				`${installedMod && updateMod && updateMod.modversion > installedMod.version ? "Upgrading" : "Downgrading"} ${modInfo?.mod.name} to ${installation?.name}...`,
+				`Updating ${modInfo?.mod.name} to ${installation?.name}...`,
 				{
 					id: `add-mod-${modInfo?.mod.modid}-${installation?.id}`,
 				},
@@ -126,7 +149,7 @@ export function ModItem({
 			if (installation === null) return;
 			listenRef.current?.();
 			toast.success(
-				`Successfully ${installedMod && updateMod && updateMod.modversion > installedMod.version ? "updated" : "downgraded"} ${modInfo?.mod.name} to ${installation.name}`,
+				`Successfully updated ${modInfo?.mod.name} to ${installation.name}`,
 				{ id: `add-mod-${modInfo?.mod.modid}-${installation.id}` },
 			);
 			await queryClient.invalidateQueries({
@@ -137,8 +160,7 @@ export function ModItem({
 			});
 		},
 	});
-	const { openDialog } = useDialogStore();
-	const { setAuthor } = useModsFilters();
+
 	return (
 		<motion.div
 			animate={{ opacity: 1, y: 0 }}
@@ -179,15 +201,10 @@ export function ModItem({
 							<Tooltip>
 								<TooltipTrigger
 									render={
-										// biome-ignore lint/a11y/noStaticElementInteractions: Not really relevant
-										<span
-											className="text-xs opacity-50 text-orange-200 cursor-pointer"
+										<button
+											className="text-xs opacity-50 text-orange-200 cursor-pointer bg-transparent border-none p-0 outline-none hover:underline"
 											onClick={() => setAuthor(mod.author)}
-											onKeyUp={(e) => {
-												if (e.key === "Enter") {
-													setAuthor(mod.author);
-												}
-											}}
+											type="button"
 										/>
 									}
 								>
@@ -210,48 +227,45 @@ export function ModItem({
 				</div>
 			</div>
 			<Group>
-				{updateMod &&
-					installation &&
-					updateMod &&
-					installedMod &&
-					compareSemverAsc(updateMod.modversion, installedMod.version) > 0 && (
-						<Tooltip>
-							<TooltipTrigger
-								render={
-									<GroupItem
-										render={
-											<Button
-												aria-label="Update to Latest Version"
-												disabled={isPending || removePending}
-												onClick={() =>
-													removeModFromInstallation({
-														modpath: installedMod?.path ?? "",
-														path: installation.path,
-													})
-												}
-												size="icon"
-												variant="outline"
-											/>
-										}
-									>
-										<DownloadCloudIcon
-											aria-hidden="true"
-											className="opacity-60"
-											size={16}
+				{updateMod && installation && installedMod && hasValidUpdate && (
+					<Tooltip>
+						<TooltipTrigger
+							render={
+								<GroupItem
+									render={
+										<Button
+											aria-label="Update to Latest Version"
+											disabled={isPending || removePending}
+											onClick={() =>
+												removeModFromInstallation({
+													modpath: installedMod?.path ?? "",
+													path: installation.path,
+												})
+											}
+											size="icon"
+											variant="outline"
 										/>
-									</GroupItem>
-								}
-							/>
-							<TooltipContent>
-								<span className="text-xs text-muted-foreground">
-									{installedMod.version} → {updateMod.modversion ?? "Unknown"}
-								</span>
-								<br />
-								Install latest version
-							</TooltipContent>
-							<GroupSeparator />
-						</Tooltip>
-					)}
+									}
+								>
+									<DownloadCloudIcon
+										aria-hidden="true"
+										className="opacity-60"
+										size={16}
+									/>
+								</GroupItem>
+							}
+						/>
+						<TooltipContent>
+							<span className="text-xs text-muted-foreground">
+								{installedMod.version} →{" "}
+								{targetRelease?.modversion ?? "Unknown"}
+							</span>
+							<br />
+							Install compatible version
+						</TooltipContent>
+						<GroupSeparator />
+					</Tooltip>
+				)}
 				{!installedMod && installation && (
 					<Tooltip>
 						<TooltipTrigger
@@ -279,7 +293,7 @@ export function ModItem({
 								</GroupItem>
 							}
 						/>
-						<TooltipContent>Install latest version</TooltipContent>
+						<TooltipContent>Install version</TooltipContent>
 						<GroupSeparator />
 					</Tooltip>
 				)}

@@ -22,8 +22,10 @@ import { useAddModToInstallation } from "@/hooks/use-add-mod-to-installation";
 import { installedModsQueryKey } from "@/hooks/use-installed-mods";
 import { modUpdatesQueryKey } from "@/hooks/use-mod-updates";
 import type { ModInfo, ProgressPayload, Release } from "@/lib/types";
+import { getTargetRelease } from "@/lib/utils";
 import { useDialogStore } from "@/stores/dialogs";
 import type { Installation } from "@/stores/installations";
+import { useModsFilters } from "@/stores/modsFilters";
 
 export type AddModDialogProps = {
 	modid: number;
@@ -49,6 +51,11 @@ export function AddModDialog({
 	const listenRef = useRef<UnlistenFn>(null);
 	const [selectedVersion, setSelectedVersion] = useState<Release | null>(null);
 	const queryClient = useQueryClient();
+	const { targetUpdateVersion } = useModsFilters();
+
+	const actualTargetVersion =
+		targetUpdateVersion || (installation?.version ?? "");
+
 	const { mutate: addModToInstallation, isPending } = useAddModToInstallation({
 		onError: (error, variables) => {
 			toast.error(
@@ -101,12 +108,12 @@ export function AddModDialog({
 
 	useEffect(() => {
 		if (modInfo && modInfo.mod.releases.length > 0) {
-			const modVersion = modInfo.mod.releases.find((release) =>
-				release.tags.includes(installation.version),
-			);
-			setSelectedVersion(modVersion ? modVersion : null);
+			const targetRelease =
+				getTargetRelease(modInfo.mod.releases, actualTargetVersion) ||
+				modInfo.mod.releases[0];
+			setSelectedVersion(targetRelease);
 		}
-	}, [modInfo, installation.version]);
+	}, [modInfo, actualTargetVersion]);
 
 	return (
 		<Dialog
@@ -132,7 +139,6 @@ export function AddModDialog({
 					you want to add to{" "}
 					<span className="text-blue-200">{installation.name}</span>.
 				</DialogDescription>
-				{/* We need a select, incase the installation version is not compatible */}
 				<div className="mt-2 w-full overflow-hidden">
 					<Select
 						onValueChange={(value) => {
