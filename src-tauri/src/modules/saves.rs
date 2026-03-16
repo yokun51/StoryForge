@@ -6,6 +6,7 @@ use std::{
     ffi::OsStr,
     fs::{create_dir_all, read_dir, remove_file, rename},
     path::Path,
+    time::{SystemTime, UNIX_EPOCH},
 };
 use tauri::{command, AppHandle};
 use tauri_plugin_zustand::ManagerExt;
@@ -24,11 +25,8 @@ pub struct World {
     pub prospecting_logs: Vec<(String, ProspectingLog)>,
 }
 
-// The result should be a list of objects that contain the name of the save, and the installation it belongs to
-// e.g. [{ name: "Save 1", installation: "Installation 1" }, { name: "Save 2", installation: "Installation 2" }]
 #[command]
 pub fn get_all_saves(app: AppHandle) -> Result<Vec<World>, UiError> {
-    // Look through all installation folders and collect save names from the .vcdbs files
     let subdir = installations_subdir(app.clone());
     let installation_dir_path = installations_folder(app.clone()).join(&subdir);
     let mut saves: Vec<World> = Vec::new();
@@ -51,16 +49,11 @@ pub fn get_all_saves(app: AppHandle) -> Result<Vec<World>, UiError> {
                         if save_path.is_file() {
                             if let Some(ext) = save_path.extension() {
                                 if ext == "vcdbs" {
-                                    // Save the string representation before moving save_path
                                     let save_path_string = save_path
                                         .as_os_str()
                                         .to_os_string()
                                         .into_string()
                                         .unwrap_or_default();
-                                    // Open said file as a sqlite database and read from the "gamedata" table, the data column from the first row
-                                    // Open the sqlite file in read-only, immutable mode to prevent creation of -wal / -shm sidecar files
-                                    // If the database was previously put into WAL mode by the game, merely opening it read/write
-                                    // would cause SQLite to create those files. Using immutable=1 + READ_ONLY avoids that.
                                     let uri =
                                         format!("file:{}?immutable=1", save_path.to_string_lossy());
                                     let conn = rusqlite::Connection::open_with_flags(
@@ -83,16 +76,10 @@ pub fn get_all_saves(app: AppHandle) -> Result<Vec<World>, UiError> {
                                         let data: Vec<u8> = row.get(0).map_err(|e| {
                                             UiError::from(format!("DB get error: {e}"))
                                         })?;
-                                        // The data is a protobuf string, we need to parse it to get the save name
-                                        // The save name is stored in the "WorldName" field
-                                        // Use prost to decode the protobuf string
                                         let gamedata =
                                             GameData::decode(data.as_slice()).map_err(|e| {
                                                 UiError::from(format!("Protobuf decode error: {e}"))
                                             })?;
-                                        // Only push a part of the gamedata, not the whole thing
-                                        // e.g. only the world_name and savegame_identifier fields
-                                        // This is to reduce the amount of data sent to the frontend
                                         let compressed_gamedata = GameData {
                                             world_name: gamedata.world_name.clone(),
                                             savegame_identifier: gamedata
@@ -117,7 +104,6 @@ pub fn get_all_saves(app: AppHandle) -> Result<Vec<World>, UiError> {
                                             play_style: gamedata.play_style,
                                             ..Default::default()
                                         };
-                                        // Check for if the map exists in the Maps folder in the installation folder
                                         let has_map = path
                                             .join("Maps")
                                             .join(format!("{}.db", gamedata.savegame_identifier))
@@ -127,9 +113,6 @@ pub fn get_all_saves(app: AppHandle) -> Result<Vec<World>, UiError> {
                                             .get("playerMapMarkers_v2")
                                             .map(|data| MapMarkers::decode(data.as_slice()).ok());
 
-                                        // Save all prospecting results found in mod_data entries that start with "oreMapMarkers",
-                                        // After the `oreMapMarkers-` part, the rest is a player uid that also needs to be saved
-                                        // for later use
                                         let mut prospecting_results = Vec::new();
                                         for (key, value) in &gamedata.mod_data {
                                             if key.starts_with("oreMapMarkers-") {
@@ -174,7 +157,6 @@ pub fn get_installation_saves(
 ) -> Result<Vec<String>, UiError> {
     let installation_zustand = app.zustand().get("installations", "installations").unwrap();
     let installation_json: Value = from_value(installation_zustand).unwrap();
-    // Find installation with matching id
     let installation = installation_json.as_array().and_then(|arr| {
         arr.iter()
             .find(|inst| inst["id"].as_u64() == Some(installation_id))
@@ -183,7 +165,6 @@ pub fn get_installation_saves(
     let installation = match installation {
         Some(inst) => inst,
         None => {
-            // Optionally, log the error or handle it as needed
             return Err(UiError {
                 name: "installation_not_found".into(),
                 message: format!("Installation with id {} not found", installation_id),
@@ -192,8 +173,6 @@ pub fn get_installation_saves(
     };
 
     let saves_path = Path::new(installation["path"].as_str().unwrap()).join("Saves");
-
-    // Traverse the saves directory and collect save names from the .vcdbs files
     let mut saves = Vec::new();
     if saves_path.exists() && saves_path.is_dir() {
         for entry in
@@ -228,7 +207,6 @@ pub fn update_world(
 ) -> Result<(), UiError> {
     let installation_zustand = app.zustand().get("installations", "installations").unwrap();
     let installation_json: Value = from_value(installation_zustand).unwrap();
-    // Find installation with matching id
     let installation = installation_json.as_array().and_then(|arr| {
         arr.iter()
             .find(|inst| inst["id"].as_u64() == Some(installation_id))
@@ -237,7 +215,6 @@ pub fn update_world(
     let installation = match installation {
         Some(inst) => inst,
         None => {
-            // Optionally, log the error or handle it as needed
             return Err(UiError {
                 name: "installation_not_found".into(),
                 message: format!("Installation with id {} not found", installation_id),
@@ -274,7 +251,6 @@ pub fn update_world(
         });
     }
 
-    // Rename the file to the new name, but sanitize it first and make it lowercase
     let file_name = name
         .replace(
             |c: char| !c.is_ascii_alphanumeric() && c != ' ' && c != '_' && c != '-',
@@ -282,7 +258,6 @@ pub fn update_world(
         )
         .to_lowercase();
     let new_world_path = saves_path.join(format!("{}.vcdbs", file_name));
-    // If an identifier is provided, and a Maps file is found with that identifier, move it too
     if let Some(id) = identifier {
         let maps_path = Path::new(&world_path)
             .parent()
@@ -293,7 +268,6 @@ pub fn update_world(
                 let new_maps_path = Path::new(installation["path"].as_str().unwrap())
                     .join("Maps")
                     .join(format!("{}.db", id));
-                // Ensure the Maps directory exists
                 let maps_dir = new_maps_path.parent().unwrap();
                 if !maps_dir.exists() {
                     create_dir_all(maps_dir)
@@ -306,7 +280,6 @@ pub fn update_world(
     }
     rename(world_path, &new_world_path).map_err(|e| UiError::from(format!("Rename error: {e}")))?;
 
-    // Update the "WorldName" field in the protobuf data inside the .vcdbs file
     let conn = rusqlite::Connection::open_with_flags(
         &new_world_path,
         OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_URI,
@@ -326,18 +299,13 @@ pub fn update_world(
         let data: Vec<u8> = row
             .get(0)
             .map_err(|e| UiError::from(format!("DB get error: {e}")))?;
-        // The data is a protobuf string, we need to parse it to get the save name
-        // The save name is stored in the "WorldName" field
-        // Use prost to decode the protobuf string
         let mut gamedata = GameData::decode(data.as_slice())
             .map_err(|e| UiError::from(format!("Protobuf decode error: {e}")))?;
         gamedata.world_name = name.clone();
-        // Re-encode the protobuf string
         let mut buf = Vec::new();
         gamedata
             .encode(&mut buf)
             .map_err(|e| UiError::from(format!("Protobuf encode error: {e}")))?;
-        // Update the database with the new data
         conn.execute("UPDATE gamedata SET data = ?1", [&buf])
             .map_err(|e| UiError::from(format!("DB update error: {e}")))?;
     }
@@ -353,7 +321,6 @@ pub fn remove_world(world_path: String) -> Result<(), UiError> {
             message: format!("World path {} not found", world_path.display()),
         });
     }
-    // Check if the file has a .vcdbs extension
     if world_path.extension() != Some(OsStr::new("vcdbs")) {
         return Err(UiError {
             name: "invalid_world_file".into(),
@@ -361,7 +328,6 @@ pub fn remove_world(world_path: String) -> Result<(), UiError> {
         });
     }
 
-    // Update the "WorldName" field in the protobuf data inside the .vcdbs file
     let conn = rusqlite::Connection::open(world_path)
         .map_err(|e| UiError::from(format!("DB open error: {e}")))?;
     let mut stmt = conn
@@ -378,9 +344,6 @@ pub fn remove_world(world_path: String) -> Result<(), UiError> {
         let data: Vec<u8> = row
             .get(0)
             .map_err(|e| UiError::from(format!("DB get error: {e}")))?;
-        // The data is a protobuf string, we need to parse it to get the save name
-        // The save name is stored in the "WorldName" field
-        // Use prost to decode the protobuf string
         let gamedata = GameData::decode(data.as_slice())
             .map_err(|e| UiError::from(format!("Protobuf decode error: {e}")))?;
 
@@ -400,4 +363,36 @@ pub fn remove_world(world_path: String) -> Result<(), UiError> {
     }
     remove_file(world_path).map_err(|e| UiError::from(format!("Remove file error: {e}")))?;
     Ok(())
+}
+
+#[command]
+pub fn backup_world(world_path: String) -> Result<String, UiError> {
+    let world_path = Path::new(&world_path);
+    if !world_path.exists() || !world_path.is_file() {
+        return Err(UiError {
+            name: "world_not_found".into(),
+            message: format!("World path {} not found", world_path.display()),
+        });
+    }
+
+    let saves_dir = world_path.parent().unwrap();
+    let backups_dir = saves_dir.parent().unwrap().join("Backups");
+
+    if !backups_dir.exists() {
+        create_dir_all(&backups_dir)
+            .map_err(|e| UiError::from(format!("Create backups dir error: {e}")))?;
+    }
+
+    let file_stem = world_path.file_stem().unwrap().to_string_lossy();
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    let backup_filename = format!("{}_backup_{}.vcdbs", file_stem, timestamp);
+    let backup_path = backups_dir.join(backup_filename);
+
+    std::fs::copy(world_path, &backup_path)
+        .map_err(|e| UiError::from(format!("Backup copy error: {e}")))?;
+
+    Ok(backup_path.to_string_lossy().into_owned())
 }

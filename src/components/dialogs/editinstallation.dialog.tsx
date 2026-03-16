@@ -367,6 +367,8 @@ export function EditInstallationDialog({
 						const safeName = makeStringFolderSafe(finalName);
 						const oldSafeName = makeStringFolderSafe(installation.name);
 						if (safeName === oldSafeName) {
+							// FIX ICI : fermer la boîte de dialogue même si on ne renomme pas le dossier !
+							closeDialog();
 							return;
 						}
 						await invoke("rename_installations_folder", {

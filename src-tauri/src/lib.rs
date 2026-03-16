@@ -47,6 +47,8 @@ pub fn run() {
             mods::remove_mod_from_installation,
             mods::save_mod_config,
             mods::copy_mod_file,
+            mods::get_disabled_mods,
+            mods::toggle_mod_state,
             // Download
             download::get_download_links,
             download::get_download_link,
@@ -79,6 +81,7 @@ pub fn run() {
             saves::get_all_saves,
             saves::update_world,
             saves::remove_world,
+            saves::backup_world,
             // Maps
             maps::inspect_map_database,
             maps::get_map_bounds,

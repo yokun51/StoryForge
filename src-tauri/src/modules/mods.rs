@@ -1,7 +1,7 @@
 use json5::from_str as json5_from_str;
 use reqwest::{get, Client};
 use serde::{Deserialize, Serialize};
-use serde_json::{from_str, from_value, json, Value};
+use serde_json::{from_str, from_value, json, to_string_pretty, Value};
 use std::{
     fs::{create_dir_all, read_dir, remove_file, File},
     io::{Read, Write},
@@ -710,5 +710,82 @@ pub fn copy_mod_file(source_path: String, dest_path: String) -> Result<(), UiErr
         message: format!("Failed to copy mod: {}", e),
     })?;
 
+    Ok(())
+}
+
+#[command]
+pub fn get_disabled_mods(path: String) -> Result<Vec<String>, UiError> {
+    let clientsettings_path = Path::new(&path).join("clientsettings.json");
+    if !clientsettings_path.exists() {
+        return Ok(vec![]);
+    }
+    let content = std::fs::read_to_string(&clientsettings_path).unwrap_or_default();
+    let json: Value = serde_json::from_str(&content).unwrap_or(json!({}));
+
+    let disabled_mods = json
+        .get("stringListSettings")
+        .and_then(|sls| sls.get("disabledMods"))
+        .and_then(|dm| dm.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(String::from))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    Ok(disabled_mods)
+}
+
+#[command]
+pub fn toggle_mod_state(path: String, modid: String, enable: bool) -> Result<(), UiError> {
+    let clientsettings_path = Path::new(&path).join("clientsettings.json");
+    let mut json: Value = if clientsettings_path.exists() {
+        let content = std::fs::read_to_string(&clientsettings_path).unwrap_or_default();
+        serde_json::from_str(&content).unwrap_or(json!({}))
+    } else {
+        json!({})
+    };
+
+    if !json.is_object() {
+        json = json!({});
+    }
+
+    let obj = json.as_object_mut().unwrap();
+
+    let string_list_settings = obj.entry("stringListSettings").or_insert(json!({}));
+    if !string_list_settings.is_object() {
+        *string_list_settings = json!({});
+    }
+
+    let settings_obj = string_list_settings.as_object_mut().unwrap();
+    let disabled_mods = settings_obj.entry("disabledMods").or_insert(json!([]));
+
+    if !disabled_mods.is_array() {
+        *disabled_mods = json!([]);
+    }
+
+    if let Some(arr) = disabled_mods.as_array_mut() {
+        if enable {
+            arr.retain(|v| v.as_str() != Some(&modid));
+        } else {
+            if !arr.iter().any(|v| v.as_str() == Some(&modid)) {
+                arr.push(json!(modid));
+            }
+        }
+    }
+
+    let content = to_string_pretty(&json).map_err(|e| UiError {
+        name: "serialize_error".into(),
+        message: format!("Failed to serialize: {}", e),
+    })?;
+
+    if let Some(parent) = clientsettings_path.parent() {
+        std::fs::create_dir_all(parent).ok();
+    }
+
+    std::fs::write(&clientsettings_path, content).map_err(|e| UiError {
+        name: "write_error".into(),
+        message: format!("Failed to write: {}", e),
+    })?;
     Ok(())
 }

@@ -9,6 +9,7 @@ import {
 	PackageSearchIcon,
 	PencilIcon,
 	PlayIcon,
+	SaveIcon,
 } from "lucide-react";
 import { motion } from "motion/react";
 import {
@@ -19,6 +20,7 @@ import {
 	ContextMenuLabel,
 	ContextMenuTrigger,
 } from "@/components/ui/context-menu";
+import { useBackupWorld } from "@/hooks/use-backup-world";
 import { useDownloadVersion } from "@/hooks/use-download-version";
 import { useInstalledVersions } from "@/hooks/use-installed-versions";
 import { usePlayInstallation } from "@/hooks/use-play-installation";
@@ -47,6 +49,7 @@ export const WorldContextMenu = ({
 	const { mutate: revealInstallationInFolder } = useRevealInFolder();
 	const { mutate: launchInstallation } = usePlayInstallation();
 	const { mutate: downloadVersion } = useDownloadVersion();
+	const { mutate: backupWorld, isPending: isBackingUp } = useBackupWorld();
 
 	// Queries
 	const { data: installedVersions } = useInstalledVersions();
@@ -123,6 +126,16 @@ export const WorldContextMenu = ({
 						Open Folder
 						<FolderOpenIcon className="inline-block h-4 w-4" />
 					</ContextMenuItem>
+
+					<ContextMenuItem
+						className="flex items-center justify-between gap-4"
+						disabled={isBackingUp}
+						onClick={() => backupWorld(world)}
+					>
+						Backup World
+						<SaveIcon className="inline-block h-4 w-4" />
+					</ContextMenuItem>
+
 					<ContextMenuItem
 						className="flex items-center justify-between gap-4"
 						onClick={() => openDialog("EditWorldDialog", { world })}
