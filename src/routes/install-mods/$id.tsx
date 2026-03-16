@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
+import { FolderDownIcon } from "lucide-react";
 import { useRef } from "react";
 import { AuthorAutocomplete } from "@/components/auto-completes/author.auto-complete";
 import { UpdateAllButton } from "@/components/buttons/update-all.button";
@@ -7,6 +8,7 @@ import { SearchInput } from "@/components/inputs";
 import { ModList } from "@/components/lists/mod.list";
 import { TextSwitch } from "@/components/switches/text.switch";
 import SideToggleGroup from "@/components/tabs/side.tab";
+import { Button } from "@/components/ui/button";
 import { ErrorComponent } from "@/components/ui/error";
 import { Label } from "@/components/ui/label";
 import {
@@ -20,6 +22,7 @@ import { useInstalledMods } from "@/hooks/use-installed-mods";
 import { useModUpdates } from "@/hooks/use-mod-updates";
 import { gameVersionsQuery, modTagsQuery } from "@/lib/queries";
 import { cn, compareSemverDesc } from "@/lib/utils";
+import { useDialogStore } from "@/stores/dialogs";
 import { useInstallationsStore } from "@/stores/installations";
 import { type ModsFilters, useModsFilters } from "@/stores/modsFilters";
 
@@ -63,6 +66,7 @@ export type OutputMod = {
 
 function RouteComponent() {
 	const { installation } = Route.useLoaderData();
+	const { openDialog } = useDialogStore();
 	const { data: gameVersions } = useQuery(gameVersionsQuery);
 	const { data: modTags } = useQuery(modTagsQuery);
 	const { data: instMods } = useInstalledMods(installation.path, {
@@ -272,6 +276,16 @@ function RouteComponent() {
 						</SelectContent>
 					</Select>
 				</div>
+
+				{/* BOUTON IMPORT MODS (Sorti de la condition, donc toujours visible) */}
+				<Button
+					className="h-9"
+					onClick={() => openDialog("ImportModsDialog", { installation })}
+					variant="outline"
+				>
+					<FolderDownIcon className="w-4 h-4 mr-2" />
+					Import Mods
+				</Button>
 
 				{/* BOUTON UPDATE ALL (Visible uniquement dans "Installed") */}
 				{side === "installed" && modUpdates && instMods && (

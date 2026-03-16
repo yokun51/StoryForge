@@ -46,6 +46,7 @@ pub fn run() {
             mods::add_mod_to_installation,
             mods::remove_mod_from_installation,
             mods::save_mod_config,
+            mods::copy_mod_file,
             // Download
             download::get_download_links,
             download::get_download_link,

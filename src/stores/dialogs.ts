@@ -11,6 +11,7 @@ import type { DuplicateInstallationDialogProps } from "@/components/dialogs/dupl
 import type { EditInstallationDialogProps } from "@/components/dialogs/editinstallation.dialog";
 import type { EditServerDialogProps } from "@/components/dialogs/editserver.dialog";
 import type { EditWorldDialogProps } from "@/components/dialogs/editworld.dialog";
+import type { ImportModsDialogProps } from "@/components/dialogs/importmods.dialog";
 import type { RemoveModDialogProps } from "@/components/dialogs/removemod.dialog";
 import type { UpdateModDialogProps } from "@/components/dialogs/updatemod.dialog";
 import type { ViewMapDialogProps } from "@/components/dialogs/viewmap.dialog";
@@ -34,6 +35,7 @@ export type DialogMap = {
 	DeleteWorldDialog: DeleteWorldDialogProps;
 	ViewMapDialog: ViewMapDialogProps;
 	DuplicateInstallationDialog: DuplicateInstallationDialogProps;
+	ImportModsDialog: ImportModsDialogProps;
 };
 
 type DialogKey = keyof DialogMap;

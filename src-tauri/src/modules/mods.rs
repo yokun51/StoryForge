@@ -685,3 +685,30 @@ pub async fn remove_mod_from_installation(params: ModRemoveParams) -> Result<Str
     })?;
     Ok("removed".into())
 }
+
+#[command]
+pub fn copy_mod_file(source_path: String, dest_path: String) -> Result<(), UiError> {
+    let source = Path::new(&source_path);
+    let dest = Path::new(&dest_path);
+
+    if !source.exists() {
+        return Err(UiError {
+            name: "not_found".into(),
+            message: format!("Source mod file not found: {}", source_path),
+        });
+    }
+
+    if let Some(parent) = dest.parent() {
+        create_dir_all(parent).map_err(|e| UiError {
+            name: "create_dir_failed".into(),
+            message: format!("Failed to create Mod directory: {}", e),
+        })?;
+    }
+
+    std::fs::copy(source, dest).map_err(|e| UiError {
+        name: "copy_failed".into(),
+        message: format!("Failed to copy mod: {}", e),
+    })?;
+
+    Ok(())
+}

@@ -23,6 +23,7 @@ import { EditInstallationDialog } from "@/components/dialogs/editinstallation.di
 import { EditServerDialog } from "@/components/dialogs/editserver.dialog";
 import { EditWorldDialog } from "@/components/dialogs/editworld.dialog";
 import { ImportInstallationDialog } from "@/components/dialogs/importinstallation.dialog";
+import { ImportModsDialog } from "@/components/dialogs/importmods.dialog";
 import { RemoveModDialog } from "@/components/dialogs/removemod.dialog";
 import { UpdateModDialog } from "@/components/dialogs/updatemod.dialog";
 import { ViewMapDialog } from "@/components/dialogs/viewmap.dialog";
@@ -242,6 +243,14 @@ function RootComponent() {
 					{...((active?.key === "DuplicateInstallationDialog"
 						? active.props
 						: {}) as DialogMap["DuplicateInstallationDialog"])}
+				/>
+			)}
+			{active?.key === "ImportModsDialog" && (
+				<ImportModsDialog
+					open={active?.key === "ImportModsDialog"}
+					{...((active?.key === "ImportModsDialog"
+						? active.props
+						: {}) as DialogMap["ImportModsDialog"])}
 				/>
 			)}
 			<Toaster richColors theme={darkMode ? "dark" : "light"} />
