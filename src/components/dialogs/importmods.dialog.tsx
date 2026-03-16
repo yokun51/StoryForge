@@ -97,11 +97,13 @@ export function ImportModsDialog({
 			for (const c of calculatedConflicts) {
 				const tm = targetMods.find(
 					(m) => m.modid.toString() === c.modid.toString(),
-				)!;
-				initialResolutions[c.modid.toString()] =
-					compareSemverAsc(c.version, tm.version) > 0
-						? "use_source"
-						: "keep_target";
+				);
+				if (tm) {
+					initialResolutions[c.modid.toString()] =
+						compareSemverAsc(c.version, tm.version) > 0
+							? "use_source"
+							: "keep_target";
+				}
 			}
 			setConflictResolutions(initialResolutions);
 		} else {
@@ -189,7 +191,9 @@ export function ImportModsDialog({
 					<div className="space-y-2">
 						<Label>Source Installation</Label>
 						<Select
-							onValueChange={(val) => setSourceId(Number(val))}
+							onValueChange={(val) => {
+								if (val) setSourceId(Number(val));
+							}}
 							value={sourceId?.toString() || ""}
 						>
 							<SelectTrigger className="w-full">
@@ -270,7 +274,9 @@ export function ImportModsDialog({
 											{conflicts.map((mod) => {
 												const targetMod = targetMods.find(
 													(m) => m.modid.toString() === mod.modid.toString(),
-												)!;
+												);
+												if (!targetMod) return null;
+
 												return (
 													<div
 														className="flex items-center justify-between gap-4 p-2 rounded border bg-background"
@@ -282,14 +288,15 @@ export function ImportModsDialog({
 															</span>
 														</div>
 														<Select
-															onValueChange={(
-																val: "keep_target" | "use_source",
-															) =>
+															onValueChange={(val) => {
+																if (!val) return;
 																setConflictResolutions((prev) => ({
 																	...prev,
-																	[mod.modid.toString()]: val,
-																}))
-															}
+																	[mod.modid.toString()]: val as
+																		| "keep_target"
+																		| "use_source",
+																}));
+															}}
 															value={conflictResolutions[mod.modid.toString()]}
 														>
 															<SelectTrigger className="w-56 shrink-0 h-8">
