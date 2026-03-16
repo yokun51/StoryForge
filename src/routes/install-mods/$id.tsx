@@ -30,12 +30,19 @@ export const Route = createFileRoute("/install-mods/$id")({
 	component: RouteComponent,
 	errorComponent: ErrorComponent,
 	loader: async ({ params }) => {
-		const installation = useInstallationsStore
+		const rawInstallation = useInstallationsStore
 			.getState()
 			.installations.find((inst) => inst.id === Number(params.id));
-		if (!installation) {
+		if (!rawInstallation) {
 			throw new Error("Installation not found");
 		}
+		// On nettoie manuellement les espaces au cas où le store serait corrompu
+		const installation = {
+			...rawInstallation,
+			name: rawInstallation.name?.trim() ?? "",
+			path: rawInstallation.path?.trim() ?? "",
+			version: rawInstallation.version?.trim() ?? "",
+		};
 		return { installation };
 	},
 });

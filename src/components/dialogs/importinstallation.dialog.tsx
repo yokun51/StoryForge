@@ -120,19 +120,19 @@ export function ImportInstallationDialog({ open }: { open: boolean }) {
 				);
 				if (installation.success) {
 					const installationId = Date.now();
-					const newInstallation = {
+					const newInstallationObj = {
 						favorite: false,
 						icon: "",
 						id: installationId,
 						index: installations.length,
 						lastTimePlayed: 0,
-						name: installation.data.name,
-						path,
+						name: installation.data.name.trim(),
+						path: path.trim(),
 						startParams: "",
 						totalTimePlayed: 0,
-						version: installation.data.version,
+						version: installation.data.version.trim(),
 					};
-					addInstallation(newInstallation);
+					addInstallation(newInstallationObj);
 
 					for (const mod of installation.data.mods) {
 						const modInfo = (await invoke("fetch_mod_info", {
@@ -141,9 +141,9 @@ export function ImportInstallationDialog({ open }: { open: boolean }) {
 						if (modInfo) {
 							addModToInstallation({
 								emitevent: `import-installation-${installationId}-${mod.id}`,
-								installation: newInstallation,
+								installation: newInstallationObj,
 								mod: modInfo,
-								version: mod.version,
+								version: mod.version.trim(),
 							});
 						}
 					}
@@ -159,7 +159,7 @@ export function ImportInstallationDialog({ open }: { open: boolean }) {
 			await initializeGame(
 				buildInstallationPath(
 					installationsParent ?? appFolder,
-					makeStringFolderSafe(installation.data.name),
+					makeStringFolderSafe(installation.data.name.trim()),
 					installationsSubdir,
 				),
 			);

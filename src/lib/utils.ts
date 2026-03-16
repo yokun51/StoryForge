@@ -16,8 +16,12 @@ export function capitalizeFirstLetter(string: string) {
 	return string.charAt(0).toUpperCase() + string.slice(1);
 }
 
+// On s'assure ici que la chaîne est trim() avant d'être formatée pour un dossier
 export function makeStringFolderSafe(string: string) {
-	return string.replace(/[^a-z0-9]/gi, "_").toLowerCase();
+	return string
+		.trim()
+		.replace(/[^a-z0-9]/gi, "_")
+		.toLowerCase();
 }
 
 function parseVer(v: string) {
@@ -60,12 +64,6 @@ export const isWindows = platform() === "windows";
 
 export const pathDelimiter = isWindows ? "\\" : "/";
 
-/**
- * Builds the full installations directory path
- * @param parentPath - The parent directory (from settings or app folder)
- * @param subdir - The subdirectory name (from settings, default: "installations")
- * @returns The full path to the installations directory
- */
 export function buildInstallationsPath(
 	parentPath: string,
 	subdir = "installations",
@@ -73,12 +71,6 @@ export function buildInstallationsPath(
 	return `${parentPath}${pathDelimiter}${subdir}`;
 }
 
-/**
- * Builds the full versions directory path
- * @param parentPath - The parent directory (from settings or app folder)
- * @param subdir - The subdirectory name (from settings, default: "versions")
- * @returns The full path to the versions directory
- */
 export function buildVersionsPath(
 	parentPath: string,
 	subdir = "versions",
@@ -86,13 +78,6 @@ export function buildVersionsPath(
 	return `${parentPath}${pathDelimiter}${subdir}`;
 }
 
-/**
- * Builds a path to a specific installation
- * @param parentPath - The parent directory (from settings or app folder)
- * @param installationName - The name of the installation
- * @param subdir - The subdirectory name (from settings, default: "installations")
- * @returns The full path to the specific installation
- */
 export function buildInstallationPath(
 	parentPath: string,
 	installationName: string,
@@ -101,13 +86,6 @@ export function buildInstallationPath(
 	return `${parentPath}${pathDelimiter}${subdir}${pathDelimiter}${installationName}`;
 }
 
-/**
- * Builds a path to a specific version
- * @param parentPath - The parent directory (from settings or app folder)
- * @param versionName - The version identifier
- * @param subdir - The subdirectory name (from settings, default: "versions")
- * @returns The full path to the specific version
- */
 export function buildVersionPath(
 	parentPath: string,
 	versionName: string,
@@ -116,27 +94,14 @@ export function buildVersionPath(
 	return `${parentPath}${pathDelimiter}${subdir}${pathDelimiter}${versionName}`;
 }
 
-/**
- * Sorts installations by favorite status and last played time
- * Favorites are prioritized, and within each group, installations are sorted
- * by lastTimePlayed in descending order (most recent first).
- * @param installations - Array of installations to sort
- * @returns Sorted array of installations
- */
 export const sortInstallations = (a: Installation, b: Installation) => {
-	// Sort favorites first
 	if (a.favorite && !b.favorite) return -1;
 	if (!a.favorite && b.favorite) return 1;
-	// Then sort by lastTimePlayed descending
 	const aTime = a.lastTimePlayed ? new Date(a.lastTimePlayed).getTime() : 0;
 	const bTime = b.lastTimePlayed ? new Date(b.lastTimePlayed).getTime() : 0;
 	return bTime - aTime;
 };
 
-/**
- * Exports the installation data (mods, name, version) to clipboard as JSON
- * @param installation - The installation to export
- */
 export const exportInstallation = async ({
 	installation,
 }: {
@@ -153,14 +118,10 @@ export const exportInstallation = async ({
 		name: installation.name,
 		version: installation.version,
 	};
-	// Copy to clipboard
 	await writeText(JSON.stringify(data, null, 2));
 	toast.success("Installation copied to clipboard");
 };
 
-/**
- * Variants for the item animations
- */
 export const itemVariants = {
 	exit: { opacity: 0, transition: { duration: 0.15 }, y: -4 },
 	hidden: { opacity: 0, y: 8 },
@@ -168,7 +129,7 @@ export const itemVariants = {
 		opacity: 1,
 		transition: {
 			damping: 32,
-			delay: i * 0.05, // 50ms incremental stagger based on current index
+			delay: i * 0.05,
 			stiffness: 420,
 			type: "spring" as const,
 		},
@@ -176,15 +137,11 @@ export const itemVariants = {
 	}),
 };
 
-/**
- * Trouve la version la plus récente d'un mod qui est <= à la version du jeu ciblée.
- */
 export function getTargetRelease(
 	releases: Release[],
 	targetGameVersion: string,
 ): Release | undefined {
 	return releases.find((release) =>
-		// On accepte la release si au moins un de ses tags (versions compatibles) est <= à la targetGameVersion
 		release.tags.some((tag) => compareSemverAsc(tag, targetGameVersion) <= 0),
 	);
 }

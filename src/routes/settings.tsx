@@ -34,7 +34,11 @@ export const Route = createFileRoute("/settings")({
 const settingsSchema = z.object({
 	darkMode: z.boolean(),
 	installationsParent: z.string().nullable(),
+	localPlayerName: z.string(),
+	localPlayerUid: z.string(),
+	localUserEmail: z.string(),
 	streamMode: z.boolean(),
+	useLocalProfile: z.boolean(),
 	versionsParent: z.string().nullable(),
 });
 
@@ -108,7 +112,6 @@ function RouteComponent() {
 				toast.success("Installations folder moved", {
 					id: "settings-save",
 				});
-				// Update all installations paths
 				updateParent(v.path ?? appFolder ?? "");
 			} else if (v.config?.deleteCurrentData) {
 				toast.success("Installations data deleted", {
@@ -123,6 +126,7 @@ function RouteComponent() {
 			await queryClient.invalidateQueries({ queryKey: ["saves"] });
 		},
 	});
+
 	const { mutateAsync: setVersionsParent } = useMutation({
 		mutationFn: ({
 			path,
@@ -149,33 +153,21 @@ function RouteComponent() {
 		onMutate: (v) => {
 			if (settingsStore.versionsParent !== v.path) {
 				if (v.config?.moveCurrentData) {
-					toast.loading("Moving versions folder...", {
-						id: "settings-save",
-					});
+					toast.loading("Moving versions folder...", { id: "settings-save" });
 				} else if (v.config?.deleteCurrentData) {
-					toast.loading("Deleting versions data...", {
-						id: "settings-save",
-					});
+					toast.loading("Deleting versions data...", { id: "settings-save" });
 				} else {
-					toast.loading("Setting versions folder...", {
-						id: "settings-save",
-					});
+					toast.loading("Setting versions folder...", { id: "settings-save" });
 				}
 			}
 		},
 		onSuccess: async (_, v) => {
 			if (v.config?.moveCurrentData) {
-				toast.success("Versions folder moved", {
-					id: "settings-save",
-				});
+				toast.success("Versions folder moved", { id: "settings-save" });
 			} else if (v.config?.deleteCurrentData) {
-				toast.success("Versions data deleted", {
-					id: "settings-save",
-				});
+				toast.success("Versions data deleted", { id: "settings-save" });
 			} else {
-				toast.success("Versions folder set", {
-					id: "settings-save",
-				});
+				toast.success("Versions folder set", { id: "settings-save" });
 			}
 			await queryClient.invalidateQueries({
 				queryKey: installedVersionsQueryKey(),
@@ -188,7 +180,11 @@ function RouteComponent() {
 		defaultValues: {
 			darkMode: settingsStore.darkMode,
 			installationsParent: settingsStore.installationsParent,
+			localPlayerName: settingsStore.localPlayerName,
+			localPlayerUid: settingsStore.localPlayerUid,
+			localUserEmail: settingsStore.localUserEmail,
 			streamMode: settingsStore.streamMode,
+			useLocalProfile: settingsStore.useLocalProfile,
 			versionsParent: settingsStore.versionsParent,
 		},
 		onSubmit: async ({ value }) => {
@@ -209,6 +205,7 @@ function RouteComponent() {
 					path: value.installationsParent.trim(),
 				});
 			}
+
 			if (
 				!value.versionsParent ||
 				value.versionsParent.trim() === "" ||
@@ -224,15 +221,21 @@ function RouteComponent() {
 					path: value.versionsParent.trim(),
 				});
 			}
-			if (value.streamMode !== settingsStore.streamMode) {
+
+			if (value.streamMode !== settingsStore.streamMode)
 				settingsStore.toggleStreamMode();
-			}
-			if (value.darkMode !== settingsStore.darkMode) {
+			if (value.darkMode !== settingsStore.darkMode)
 				settingsStore.toggleDarkMode();
-			}
-			toast.success("Settings saved", {
-				id: "settings-save",
-			});
+			if (value.useLocalProfile !== settingsStore.useLocalProfile)
+				settingsStore.setUseLocalProfile(value.useLocalProfile);
+			if (value.localPlayerName !== settingsStore.localPlayerName)
+				settingsStore.setLocalPlayerName(value.localPlayerName);
+			if (value.localPlayerUid !== settingsStore.localPlayerUid)
+				settingsStore.setLocalPlayerUid(value.localPlayerUid);
+			if (value.localUserEmail !== settingsStore.localUserEmail)
+				settingsStore.setLocalUserEmail(value.localUserEmail);
+
+			toast.success("Settings saved", { id: "settings-save" });
 		},
 		validators: {
 			onChange: settingsSchema,
@@ -262,6 +265,7 @@ function RouteComponent() {
 				: choice === "delete"
 					? { deleteCurrentData: true, moveCurrentData: false }
 					: { deleteCurrentData: false, moveCurrentData: false };
+
 		if (pendingField === "installationsParent") {
 			setConfigs({
 				installationsParent: config,
@@ -281,10 +285,7 @@ function RouteComponent() {
 			});
 			form.setFieldValue("versionsParent", pendingPath ?? "");
 		} else {
-			setConfigs({
-				installationsParent: config,
-				versionsParent: config,
-			});
+			setConfigs({ installationsParent: config, versionsParent: config });
 			form.setFieldValue("installationsParent", pendingPath ?? "");
 			form.setFieldValue("versionsParent", pendingPath ?? "");
 		}
@@ -345,8 +346,7 @@ function RouteComponent() {
 										field.state.meta.errors.map((error, index) => (
 											<p
 												className="text-destructive text-xs"
-												// biome-ignore lint/suspicious/noArrayIndexKey: Needed
-												key={index}
+												key={error?.message?.toString() || index}
 											>
 												{error?.message}
 											</p>
@@ -402,8 +402,7 @@ function RouteComponent() {
 										field.state.meta.errors.map((error, index) => (
 											<p
 												className="text-destructive text-xs"
-												// biome-ignore lint/suspicious/noArrayIndexKey: Needed
-												key={index}
+												key={error?.message?.toString() || index}
 											>
 												{error?.message}
 											</p>
@@ -434,13 +433,13 @@ function RouteComponent() {
 				</form.Field>
 				<form.Field name="streamMode">
 					{(field) => (
-						<div className="flex items-center gap-3">
+						<div className="flex items-center gap-3 mt-4">
 							<Checkbox
 								checked={field.state.value}
 								id="streamMode"
-								onCheckedChange={(checked) => {
-									field.handleChange(checked === true);
-								}}
+								onCheckedChange={(checked) =>
+									field.handleChange(checked === true)
+								}
 							/>
 							<Label htmlFor="streamMode">Enable Stream Mode</Label>
 						</div>
@@ -452,14 +451,83 @@ function RouteComponent() {
 							<Checkbox
 								checked={field.state.value}
 								id="darkMode"
-								onCheckedChange={(checked) => {
-									field.handleChange(checked === true);
-								}}
+								onCheckedChange={(checked) =>
+									field.handleChange(checked === true)
+								}
 							/>
 							<Label htmlFor="darkMode">Enable Dark Mode</Label>
 						</div>
 					)}
 				</form.Field>
+
+				<div className="border-t pt-6 mt-6">
+					<h3 className="text-lg font-medium mb-4">Local Profile Settings</h3>
+					<form.Field name="useLocalProfile">
+						{(field) => (
+							<div className="flex items-center gap-3 mb-4">
+								<Checkbox
+									checked={field.state.value}
+									id="useLocalProfile"
+									onCheckedChange={(checked) =>
+										field.handleChange(checked === true)
+									}
+								/>
+								<Label htmlFor="useLocalProfile">
+									Enable Local Profile (automatically creates
+									clientsettings.json on new installations)
+								</Label>
+							</div>
+						)}
+					</form.Field>
+
+					<form.Subscribe selector={(state) => state.values.useLocalProfile}>
+						{(useLocalProfile) =>
+							useLocalProfile && (
+								<div className="pl-6 border-l-2 ml-2 space-y-4 max-w-md">
+									<form.Field name="localPlayerName">
+										{(field) => (
+											<div className="grid gap-2">
+												<Label htmlFor="localPlayerName">
+													Local Player Name
+												</Label>
+												<Input
+													id="localPlayerName"
+													onChange={(e) => field.handleChange(e.target.value)}
+													value={field.state.value}
+												/>
+											</div>
+										)}
+									</form.Field>
+									<form.Field name="localPlayerUid">
+										{(field) => (
+											<div className="grid gap-2">
+												<Label htmlFor="localPlayerUid">Local Player UID</Label>
+												<Input
+													id="localPlayerUid"
+													onChange={(e) => field.handleChange(e.target.value)}
+													value={field.state.value}
+												/>
+											</div>
+										)}
+									</form.Field>
+									<form.Field name="localUserEmail">
+										{(field) => (
+											<div className="grid gap-2">
+												<Label htmlFor="localUserEmail">Local User Email</Label>
+												<Input
+													id="localUserEmail"
+													onChange={(e) => field.handleChange(e.target.value)}
+													value={field.state.value}
+												/>
+											</div>
+										)}
+									</form.Field>
+								</div>
+							)
+						}
+					</form.Subscribe>
+				</div>
+
 				<form.Subscribe
 					selector={(s) => ({
 						isDefaultValue: s.isDefaultValue,
@@ -470,6 +538,7 @@ function RouteComponent() {
 				>
 					{(state) => (
 						<Button
+							className="mt-6"
 							disabled={
 								state.isSubmitting ||
 								!state.isTouched ||
@@ -483,6 +552,7 @@ function RouteComponent() {
 					)}
 				</form.Subscribe>
 			</main>
+
 			<AlertDialog onOpenChange={setDialogOpen} open={dialogOpen}>
 				<AlertDialogContent>
 					<AlertDialogHeader>

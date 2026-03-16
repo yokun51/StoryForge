@@ -40,7 +40,8 @@ export function DuplicateInstallationDialog({
 
 	const { mutateAsync: duplicateFolder, isPending } = useMutation({
 		mutationFn: async (newName: string) => {
-			const safeName = makeStringFolderSafe(newName);
+			const finalName = newName.trim();
+			const safeName = makeStringFolderSafe(finalName);
 			const oldSafeName = makeStringFolderSafe(installation.name);
 			return (await invoke("duplicate_installations_folder", {
 				newName: safeName,
@@ -57,6 +58,7 @@ export function DuplicateInstallationDialog({
 			});
 		},
 		onSuccess: (newPath, newName) => {
+			const finalName = newName.trim();
 			toast.success("Installation duplicated successfully", {
 				id: "duplicate",
 			});
@@ -67,8 +69,8 @@ export function DuplicateInstallationDialog({
 					id: Date.now(),
 					index: Date.now(),
 					lastTimePlayed: 0,
-					name: newName,
-					path: newPath,
+					name: finalName,
+					path: newPath.trim(),
 					totalTimePlayed: 0,
 				},
 				(status) => status && closeDialog(),
@@ -78,14 +80,14 @@ export function DuplicateInstallationDialog({
 
 	const form = useForm({
 		defaultValues: {
-			name: `${installation.name} - copy`,
+			name: `${installation.name.trim()} - copy`,
 		},
 		onSubmit: async ({ value }) => {
-			await duplicateFolder(value.name);
+			await duplicateFolder(value.name.trim());
 		},
 		validators: {
 			onChange: z.object({
-				name: z.string().min(1, "Name is required"),
+				name: z.string().trim().min(1, "Name is required"),
 			}),
 		},
 	});
@@ -107,7 +109,9 @@ export function DuplicateInstallationDialog({
 								<Label htmlFor="name">New Name</Label>
 								<Input
 									id="name"
-									onChange={(e) => field.handleChange(e.target.value)}
+									onChange={(e) =>
+										field.handleChange(e.target.value.replace(/^\s+/, ""))
+									}
 									onKeyUp={(e) => {
 										if (e.key === "Enter") {
 											form.handleSubmit();

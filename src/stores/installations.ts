@@ -41,27 +41,44 @@ type InstallationsStore = {
 export const useInstallationsStore = create<InstallationsStore>((set) => ({
 	addInstallation: (installation, cb) =>
 		set((state) => {
-			if (state.installations.find((s) => s.path === installation.path)) {
+			const sanitizedInstallation = {
+				...installation,
+				icon: installation.icon?.trim() ?? null,
+				name: installation.name.trim(),
+				path: installation.path.trim(),
+				startParams: installation.startParams.trim(),
+				version: installation.version.trim(),
+			};
+
+			if (
+				state.installations.find((s) => s.path === sanitizedInstallation.path)
+			) {
 				toast.error(
-					`Installation with path "${installation.path}" already exists`,
+					`Installation with path "${sanitizedInstallation.path}" already exists`,
 				);
 				cb?.(false);
 				return state;
 			}
-			if (state.installations.find((s) => s.id === installation.id)) {
-				toast.error(`Installation with ID "${installation.id}" already exists`);
-				cb?.(false);
-				return state;
-			}
-			if (state.installations.find((s) => s.name === installation.name)) {
+			if (state.installations.find((s) => s.id === sanitizedInstallation.id)) {
 				toast.error(
-					`Installation with name "${installation.name}" already exists`,
+					`Installation with ID "${sanitizedInstallation.id}" already exists`,
 				);
 				cb?.(false);
 				return state;
 			}
-			const installations = [...state.installations, installation];
-			toast.success(`Installation "${installation.name}" added successfully`);
+			if (
+				state.installations.find((s) => s.name === sanitizedInstallation.name)
+			) {
+				toast.error(
+					`Installation with name "${sanitizedInstallation.name}" already exists`,
+				);
+				cb?.(false);
+				return state;
+			}
+			const installations = [...state.installations, sanitizedInstallation];
+			toast.success(
+				`Installation "${sanitizedInstallation.name}" added successfully`,
+			);
 			cb?.(true);
 			return { installations };
 		}),
@@ -76,7 +93,6 @@ export const useInstallationsStore = create<InstallationsStore>((set) => ({
 			const [moved] = installations.splice(oldIndex, 1);
 			installations.splice(newIndex, 0, moved);
 
-			// Re-index all installations
 			const reindexed = installations.map((installation, idx) => ({
 				...installation,
 				index: idx,
@@ -99,34 +115,51 @@ export const useInstallationsStore = create<InstallationsStore>((set) => ({
 		})),
 	updateInstallation: (installation, cb) =>
 		set((state) => {
+			const sanitizedInstallation = {
+				...installation,
+				icon: installation.icon?.trim() ?? null,
+				name: installation.name.trim(),
+				path: installation.path.trim(),
+				startParams: installation.startParams.trim(),
+				version: installation.version.trim(),
+			};
+
 			if (
 				state.installations.find(
-					(s) => s.path === installation.path && s.id !== installation.id,
+					(s) =>
+						s.path === sanitizedInstallation.path &&
+						s.id !== sanitizedInstallation.id,
 				)
 			) {
 				toast.error(
-					`Installation with path "${installation.path}" already exists`,
+					`Installation with path "${sanitizedInstallation.path}" already exists`,
 				);
 				cb?.(false);
 				return state;
 			}
 			if (
 				state.installations.find(
-					(s) => s.name === installation.name && s.id !== installation.id,
+					(s) =>
+						s.name === sanitizedInstallation.name &&
+						s.id !== sanitizedInstallation.id,
 				)
 			) {
 				toast.error(
-					`Installation with name "${installation.name}" already exists`,
+					`Installation with name "${sanitizedInstallation.name}" already exists`,
 				);
 				cb?.(false);
 				return state;
 			}
-			toast.success(`Installation "${installation.name}" updated successfully`);
+			toast.success(
+				`Installation "${sanitizedInstallation.name}" updated successfully`,
+			);
 			cb?.(true);
 			return {
 				installations: [
-					...state.installations.filter((s) => s.id !== installation.id),
-					installation,
+					...state.installations.filter(
+						(s) => s.id !== sanitizedInstallation.id,
+					),
+					sanitizedInstallation,
 				],
 			};
 		}),
@@ -162,6 +195,12 @@ export const useInstallations = () => {
 
 	const outInstallations = [...installations]
 		.filter((i) => i !== null)
+		.map((i) => ({
+			...i,
+			name: i.name?.trim() ?? "",
+			path: i.path?.trim() ?? "",
+			version: i.version?.trim() ?? "",
+		}))
 		.sort((a, b) => a.index - b.index);
 
 	return {

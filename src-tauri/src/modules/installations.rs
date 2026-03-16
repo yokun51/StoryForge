@@ -20,14 +20,28 @@ use super::errors::UiError;
 use super::utils::{installations_subdir, move_folder, versions_folder, versions_subdir};
 
 #[command]
-pub async fn initialize_game(path: String) -> Result<String, UiError> {
-    let pb = PathBuf::from(path).join("Mods");
-    if !pb.exists() {
-        create_dir_all(&pb).map_err(|e| UiError {
+pub async fn initialize_game(
+    path: String,
+    client_settings: Option<String>,
+) -> Result<String, UiError> {
+    let pb = PathBuf::from(&path);
+    let mods_pb = pb.join("Mods");
+    if !mods_pb.exists() {
+        create_dir_all(&mods_pb).map_err(|e| UiError {
             name: "create_dir_failed".into(),
             message: format!("Failed to create directory: {e}"),
         })?;
     }
+
+    // Si un profil local a été fourni, on crée le fichier clientsettings.json
+    if let Some(settings) = client_settings {
+        let settings_path = pb.join("clientsettings.json");
+        write(&settings_path, settings).map_err(|e| UiError {
+            name: "write_failed".into(),
+            message: format!("Failed to write clientsettings.json: {e}"),
+        })?;
+    }
+
     Ok("initialized".into())
 }
 

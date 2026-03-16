@@ -13,7 +13,8 @@ use std::{
         Arc,
     },
 };
-use tauri::{command, Emitter, Listener, Runtime};
+use tauri::path::BaseDirectory;
+use tauri::{command, Emitter, Listener, Manager, Runtime};
 
 use super::errors::UiError;
 
@@ -487,4 +488,93 @@ pub async fn get_download_link(version: &str) -> Result<String, UiError> {
     } else {
         Err(UiError::from("No download_url found in response"))
     }
+}
+
+#[command]
+pub async fn extract_bundled_archive<R: Runtime>(
+    app: tauri::AppHandle<R>,
+    destpath: String,
+    emitevent: String,
+) -> Result<String, UiError> {
+    let destpath_buf = PathBuf::from(&destpath);
+
+    // Résolution du chemin de l'archive incluse dans le .exe
+    let archive_path_buf = app
+        .path()
+        .resolve("resources/vintagestory-1.21.6.zip", BaseDirectory::Resource)
+        .map_err(|e| UiError::from(format!("Failed to resolve resource: {e}")))?;
+
+    if !archive_path_buf.exists() {
+        return Err(UiError::from(format!(
+            "Bundled archive not found at: {}",
+            archive_path_buf.display()
+        )));
+    }
+
+    fs::create_dir_all(&destpath_buf)
+        .map_err(|e| UiError::from(format!("create dir error: {e}")))?;
+
+    let zip_file = File::open(&archive_path_buf).map_err(|e| format!("open zip error: {e}"))?;
+    let mut archive = zip::ZipArchive::new(zip_file)
+        .map_err(|e| UiError::from(format!("zip open error: {e}")))?;
+
+    let count_to_extract = archive.len() as u64;
+    let mut processed: u64 = 0;
+
+    for i in 0..archive.len() {
+        let mut entry = archive
+            .by_index(i)
+            .map_err(|e| UiError::from(format!("zip index error: {e}")))?;
+        let entry_name = entry.name().to_string();
+
+        // On utilise "" comme préfixe car vous avez dit que le dossier VintageStory est déjà dans le zip
+        let out_path = make_output_path(&destpath_buf, &entry_name, "")
+            .map_err(|e| UiError::from(format!("path error: {e}")))?;
+
+        if entry.is_dir() {
+            fs::create_dir_all(&out_path)
+                .map_err(|e| UiError::from(format!("mkdir error: {e}")))?;
+        } else {
+            if let Some(parent) = out_path.parent() {
+                fs::create_dir_all(parent)
+                    .map_err(|e| UiError::from(format!("mkdir parent error: {e}")))?;
+            }
+            let mut out_file = File::create(&out_path)
+                .map_err(|e| UiError::from(format!("create file error: {e}")))?;
+            io::copy(&mut entry, &mut out_file)
+                .map_err(|e| UiError::from(format!("extract write error: {e}")))?;
+        }
+
+        processed += 1;
+        // Émission de la progression tous les 50 fichiers pour ne pas saturer le bridge
+        if processed % 50 == 0 || processed == count_to_extract {
+            let _ = app.emit(
+                &emitevent,
+                ProgressPayload {
+                    phase: "extract",
+                    downloaded: None,
+                    total: None,
+                    percent: Some((processed as f64 / count_to_extract as f64) * 100.0),
+                    current: Some(processed),
+                    count: Some(count_to_extract),
+                    message: Some(format!("Extracted {}", entry_name)),
+                },
+            );
+        }
+    }
+
+    let _ = app.emit(
+        &emitevent,
+        ProgressPayload {
+            phase: "done",
+            downloaded: None,
+            total: None,
+            percent: Some(100.0),
+            current: Some(processed),
+            count: Some(count_to_extract),
+            message: None,
+        },
+    );
+
+    Ok("success".into())
 }

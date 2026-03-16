@@ -46,6 +46,7 @@
 		"macOS": {
 			"signingIdentity": "-"
 		},
+		"resources": ["resources/vintagestory-1.21.6.zip"],
 		"targets": "all",
 		"windows": {
 			"certificateThumbprint": null,

@@ -51,6 +51,7 @@ pub fn run() {
             download::get_download_links,
             download::get_download_link,
             download::download_and_maybe_extract,
+            download::extract_bundled_archive,
             // Versions
             versions::fetch_versions,
             versions::get_installed_versions,

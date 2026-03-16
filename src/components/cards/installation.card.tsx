@@ -34,29 +34,33 @@ export function InstallationCard({
 	onUnfavorite,
 	onEdit,
 	onAddMods,
+	onDuplicate,
 }: InstallationCardProps) {
 	const { mutate: installVersion, isPending: isInstalling } =
 		useDownloadVersion();
 
-	const { data: versions } = useInstalledVersions();
+	const { data: versionsData } = useInstalledVersions();
+	const versions = versionsData?.map((v) => v.trim()) ?? [];
+	const instVersion = installation.version?.trim() ?? "";
+
 	return (
 		<>
 			<div className="flex items-center gap-3">
 				<div
 					className={`h-2 w-2 rounded-full ${
-						versions.includes(installation.version)
+						versions.includes(instVersion)
 							? "bg-success"
 							: "bg-muted-foreground/40"
 					}`}
 				/>
 				<Tooltip>
-					<TooltipTrigger className="flex flex-col justify-start text-left">
-						<p className="font-mono text-sm text-foreground">
-							{installation.name}
+					<TooltipTrigger className="flex flex-col justify-start items-start text-left">
+						<p className="font-mono text-sm text-foreground font-medium">
+							{installation.name.trim()}
 						</p>
 						{installation.version && (
 							<p className="font-mono text-xs text-muted-foreground">
-								v{installation.version}
+								v{instVersion}
 							</p>
 						)}
 					</TooltipTrigger>
@@ -72,7 +76,7 @@ export function InstallationCard({
 			</div>
 			<Group>
 				<Tooltip>
-					{versions.includes(installation.version) ? (
+					{versions.includes(instVersion) ? (
 						<>
 							<TooltipTrigger
 								render={
@@ -87,11 +91,13 @@ export function InstallationCard({
 										}
 									>
 										<Play className="h-4 w-4" />
-										<span className="sr-only">Play {installation.name}</span>
+										<span className="sr-only">
+											Play {installation.name.trim()}
+										</span>
 									</GroupItem>
 								}
 							/>
-							<TooltipContent>Play {installation.name}</TooltipContent>
+							<TooltipContent>Play {installation.name.trim()}</TooltipContent>
 						</>
 					) : (
 						<>
@@ -102,7 +108,7 @@ export function InstallationCard({
 											<Button
 												className="h-8 w-8 text-muted-foreground hover:text-foreground"
 												disabled={isInstalling}
-												onClick={() => installVersion(installation.version)}
+												onClick={() => installVersion(instVersion)}
 												size="icon"
 												variant="ghost"
 											/>
@@ -110,14 +116,12 @@ export function InstallationCard({
 									>
 										<DownloadCloudIcon className="h-4 w-4" />
 										<span className="sr-only">
-											Download version {installation.version}
+											Download version {instVersion}
 										</span>
 									</GroupItem>
 								}
 							/>
-							<TooltipContent>
-								Download version {installation.version}
-							</TooltipContent>
+							<TooltipContent>Download version {instVersion}</TooltipContent>
 						</>
 					)}
 				</Tooltip>
@@ -135,7 +139,9 @@ export function InstallationCard({
 								}
 							>
 								<PackagePlusIcon className="h-4 w-4" />
-								<span className="sr-only">Add mods to {installation.name}</span>
+								<span className="sr-only">
+									Add mods to {installation.name.trim()}
+								</span>
 							</GroupItem>
 						}
 					/>
@@ -155,11 +161,11 @@ export function InstallationCard({
 								}
 							>
 								<Pencil className="h-4 w-4" />
-								<span className="sr-only">Edit {installation.name}</span>
+								<span className="sr-only">Edit {installation.name.trim()}</span>
 							</GroupItem>
 						}
 					/>
-					<TooltipContent>Edit {installation.name}</TooltipContent>
+					<TooltipContent>Edit {installation.name.trim()}</TooltipContent>
 				</Tooltip>
 				<Tooltip>
 					<TooltipTrigger
@@ -175,11 +181,13 @@ export function InstallationCard({
 								}
 							>
 								<CopyIcon className="h-4 w-4" />
-								<span className="sr-only">Duplicate {installation.name}</span>
+								<span className="sr-only">
+									Duplicate {installation.name.trim()}
+								</span>
 							</GroupItem>
 						}
 					/>
-					<TooltipContent>Duplicate {installation.name}</TooltipContent>
+					<TooltipContent>Duplicate {installation.name.trim()}</TooltipContent>
 				</Tooltip>
 				<Tooltip>
 					<TooltipTrigger
@@ -207,7 +215,7 @@ export function InstallationCard({
 								/>
 								<span className="sr-only">
 									{installation.favorite ? "Unfavorite" : "Favorite"}{" "}
-									{installation.name}
+									{installation.name.trim()}
 								</span>
 							</GroupItem>
 						}

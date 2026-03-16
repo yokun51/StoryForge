@@ -40,7 +40,9 @@ export function InstallationRow({ installation }: InstallationRowProps) {
 
 	// Queries
 	const { data: versions } = useInstalledVersions();
-	const version = versions?.find((v) => v === installation.version);
+	const version = versions?.find(
+		(v) => v.trim() === installation.version.trim(),
+	);
 
 	// Mutations
 	const { mutate: downloadVersion, isPending: isInstalling } =
@@ -52,11 +54,13 @@ export function InstallationRow({ installation }: InstallationRowProps) {
 		<>
 			<div className="flex items-center flex-1 gap-3">
 				<Tooltip>
-					<TooltipTrigger className="flex flex-col justify-start">
-						<p className="text-sm text-foreground">{installation.name}</p>
+					<TooltipTrigger className="flex flex-col justify-start items-start text-left">
+						<p className="text-sm text-foreground font-medium">
+							{installation.name.trim()}
+						</p>
 						{installation.version && (
 							<p className="text-xs text-muted-foreground">
-								v{installation.version}
+								v{installation.version.trim()}
 							</p>
 						)}
 					</TooltipTrigger>
@@ -83,7 +87,7 @@ export function InstallationRow({ installation }: InstallationRowProps) {
 												? playWithInstallation({
 														id: installation.id,
 													})
-												: downloadVersion(installation.version)
+												: downloadVersion(installation.version.trim())
 										}
 										size="icon"
 										variant="outline"
@@ -107,7 +111,7 @@ export function InstallationRow({ installation }: InstallationRowProps) {
 						}
 					/>
 					<TooltipContent>
-						{version ? "Launch" : `Download ${installation.version}`}
+						{version ? "Launch" : `Download ${installation.version.trim()}`}
 					</TooltipContent>
 				</Tooltip>
 				<GroupSeparator />
@@ -210,7 +214,7 @@ export function InstallationRow({ installation }: InstallationRowProps) {
 								render={
 									<Button
 										aria-label="Open folder"
-										onClick={() => openFolder(installation.path)}
+										onClick={() => openFolder(installation.path.trim())}
 										size="icon"
 										variant="outline"
 									/>

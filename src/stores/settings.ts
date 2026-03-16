@@ -25,12 +25,25 @@ type SettingsStore = {
 	) => Promise<void>;
 	streamMode: boolean;
 	toggleStreamMode: () => void;
+
+	// Nouveaux paramètres pour l'Etape 4 (Profil Local)
+	useLocalProfile: boolean;
+	setUseLocalProfile: (v: boolean) => void;
+	localPlayerName: string;
+	setLocalPlayerName: (v: string) => void;
+	localPlayerUid: string;
+	setLocalPlayerUid: (v: string) => void;
+	localUserEmail: string;
+	setLocalUserEmail: (v: string) => void;
 };
 
 export const useSettingsStore = create<SettingsStore>()((set, _get, store) => ({
 	darkMode: window.matchMedia?.("(prefers-color-scheme: dark)").matches,
 	installationsParent: null,
 	installationsSubdir: "installations",
+	localPlayerName: "Player",
+	localPlayerUid: "abc123xyz",
+	localUserEmail: "player@example.com",
 	setInstallationsParent: async (path, config) => {
 		const appFolder = await appDataDir();
 		const { installationsParent, installationsSubdir } = store.getState();
@@ -48,6 +61,10 @@ export const useSettingsStore = create<SettingsStore>()((set, _get, store) => ({
 		}
 		set(() => ({ installationsParent: path }));
 	},
+	setLocalPlayerName: (v) => set({ localPlayerName: v }),
+	setLocalPlayerUid: (v) => set({ localPlayerUid: v }),
+	setLocalUserEmail: (v) => set({ localUserEmail: v }),
+	setUseLocalProfile: (v) => set({ useLocalProfile: v }),
 	setVersionsParent: async (path, config) => {
 		const appFolder = await appDataDir();
 		const { versionsParent, versionsSubdir } = store.getState();
@@ -76,6 +93,9 @@ export const useSettingsStore = create<SettingsStore>()((set, _get, store) => ({
 			return { darkMode: !state.darkMode };
 		}),
 	toggleStreamMode: () => set((state) => ({ streamMode: !state.streamMode })),
+
+	// Initialisation de l'Étape 4
+	useLocalProfile: false,
 	versionsParent: null,
 	versionsSubdir: "versions",
 }));
