@@ -110,11 +110,21 @@ export const exportInstallation = async ({
 	const installationMods = await invoke<{ mods: OutputMod[] }>("get_mods", {
 		path: installation.path,
 	});
+	const disabledMods = await invoke<string[]>("get_disabled_mods", {
+		path: installation.path,
+	});
+
 	const data = {
-		mods: installationMods.mods.map((m) => ({
-			id: m.modid,
-			version: m.version,
-		})),
+		mods: installationMods.mods.map((m) => {
+			const isDisabled = disabledMods.some(
+				(d) => d === m.modid.toString() || d.startsWith(`${m.modid}@`),
+			);
+			return {
+				disabled: isDisabled,
+				id: m.modid,
+				version: m.version,
+			};
+		}),
 		name: installation.name,
 		version: installation.version,
 	};

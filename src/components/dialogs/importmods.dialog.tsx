@@ -21,6 +21,7 @@ import {
 	SelectItem,
 	SelectTrigger,
 } from "@/components/ui/select";
+import { useDisabledMods } from "@/hooks/use-disabled-mods";
 import {
 	installedModsQueryKey,
 	useInstalledMods,
@@ -47,7 +48,6 @@ export function ImportModsDialog({
 	const [sourceId, setSourceId] = useState<number | null>(null);
 	const sourceInstallation = installations.find((i) => i.id === sourceId);
 
-	// Fetch mods for both target (current) and source installations
 	const { data: targetModsData } = useInstalledMods(installation.path);
 	const targetMods = targetModsData?.mods || [];
 
@@ -57,27 +57,27 @@ export function ImportModsDialog({
 	);
 	const sourceMods = sourceModsData?.mods || [];
 
-	// Derived state for comparison
+	const { data: sourceDisabledModsData } = useDisabledMods(
+		sourceInstallation?.path || "",
+	);
+	const sourceDisabledMods = sourceDisabledModsData || [];
+
 	const [newMods, setNewMods] = useState<OutputMod[]>([]);
 	const [conflicts, setConflicts] = useState<OutputMod[]>([]);
 
-	// User selections
 	const [selectedNewMods, setSelectedNewMods] = useState<string[]>([]);
 	const [conflictResolutions, setConflictResolutions] = useState<
 		Record<string, "keep_target" | "use_source">
 	>({});
 
-	// Calculate differences when source changes
 	useEffect(() => {
 		if (sourceMods.length > 0) {
 			const targetIds = new Set(targetMods.map((m) => m.modid.toString()));
 
-			// Mods that don't exist at all in target
 			const calculatedNewMods = sourceMods.filter(
 				(sm) => !targetIds.has(sm.modid.toString()),
 			);
 
-			// Mods that exist in both but might have different versions
 			const calculatedConflicts = sourceMods.filter((sm) => {
 				const tm = targetMods.find(
 					(m) => m.modid.toString() === sm.modid.toString(),
@@ -88,10 +88,8 @@ export function ImportModsDialog({
 			setNewMods(calculatedNewMods);
 			setConflicts(calculatedConflicts);
 
-			// Pre-select all new mods by default
 			setSelectedNewMods(calculatedNewMods.map((m) => m.modid.toString()));
 
-			// Pre-select resolutions smartly (always recommend the higher version)
 			const initialResolutions: Record<string, "keep_target" | "use_source"> =
 				{};
 			for (const c of calculatedConflicts) {
@@ -118,7 +116,6 @@ export function ImportModsDialog({
 		mutationFn: async () => {
 			let importedCount = 0;
 
-			// 1. Copy selected new mods
 			for (const modid of selectedNewMods) {
 				const sm = sourceMods.find((m) => m.modid.toString() === modid);
 				if (sm) {
@@ -129,22 +126,29 @@ export function ImportModsDialog({
 						sourcePath: sm.path,
 					});
 					importedCount++;
+
+					const isDisabled = sourceDisabledMods.some(
+						(d) => d === sm.modid.toString() || d.startsWith(`${sm.modid}@`),
+					);
+					await invoke("toggle_mod_state", {
+						enable: !isDisabled,
+						modid: sm.modid.toString(),
+						path: installation.path,
+						version: sm.version,
+					});
 				}
 			}
 
-			// 2. Handle conflicts (only if user chose 'use_source')
 			for (const [modid, resolution] of Object.entries(conflictResolutions)) {
 				if (resolution === "use_source") {
 					const sm = sourceMods.find((m) => m.modid.toString() === modid);
 					const tm = targetMods.find((m) => m.modid.toString() === modid);
 
 					if (sm && tm) {
-						// Remove the target mod first
 						await invoke("remove_mod_from_installation", {
 							params: { modpath: tm.path, path: installation.path },
 						});
 
-						// Copy the source mod
 						const fileName = sm.path.split(/[/\\]/).pop();
 						const destPath = `${installation.path}${pathDelimiter}Mods${pathDelimiter}${fileName}`;
 						await invoke("copy_mod_file", {
@@ -152,6 +156,16 @@ export function ImportModsDialog({
 							sourcePath: sm.path,
 						});
 						importedCount++;
+
+						const isDisabled = sourceDisabledMods.some(
+							(d) => d === sm.modid.toString() || d.startsWith(`${sm.modid}@`),
+						);
+						await invoke("toggle_mod_state", {
+							enable: !isDisabled,
+							modid: sm.modid.toString(),
+							path: installation.path,
+							version: sm.version,
+						});
 					}
 				}
 			}

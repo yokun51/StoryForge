@@ -56,7 +56,9 @@ export function ModItem({
 	const listenRef = useRef<UnlistenFn>(null);
 	const emitevent = `mod-download-${mod.modid}-${installation?.id}`;
 	const installedMod = installedMods.find(
-		(i) => i.modid === mod.modid || mod.modidstrs.includes(i.modid.toString()),
+		(i) =>
+			i.modid.toString() === mod.modid.toString() ||
+			mod.modidstrs.includes(i.modid.toString()),
 	);
 	const updateMod =
 		modUpdates?.updates[mod.modidstrs[0]] ??
@@ -69,9 +71,12 @@ export function ModItem({
 		installation?.path ?? "",
 	);
 
-	// FIX: On ajoute .toString() pour correspondre au type string[]
 	const isCurrentlyDisabled = installedMod
-		? disabledMods?.includes(installedMod.modid.toString())
+		? disabledMods?.some(
+				(d) =>
+					d === installedMod.modid.toString() ||
+					d.startsWith(`${installedMod.modid}@`),
+			)
 		: false;
 
 	const { data: modInfo } = useQuery({
@@ -253,10 +258,10 @@ export function ModItem({
 							disabled={isToggling}
 							id={`toggle-${mod.modid}`}
 							onCheckedChange={(checked) => {
-								// FIX: On ajoute .toString() pour correspondre à l'attente du type string
 								toggleMod({
 									enable: checked,
 									modid: installedMod.modid.toString(),
+									version: installedMod.version,
 								});
 							}}
 						/>

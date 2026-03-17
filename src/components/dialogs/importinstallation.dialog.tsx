@@ -27,6 +27,7 @@ import { useSettingsStore } from "@/stores/settings";
 const installationSchema = z.object({
 	mods: z.array(
 		z.object({
+			disabled: z.boolean().optional(),
 			id: z.string(),
 			version: z.string(),
 		}),
@@ -84,6 +85,16 @@ export function ImportInstallationDialog({ open }: { open: boolean }) {
 					id: `add-mod-${variables.mod.mod.modid}-${variables.installation.id}`,
 				},
 			);
+
+			if (variables.disabled && variables.originalId) {
+				await invoke("toggle_mod_state", {
+					enable: false,
+					modid: variables.originalId,
+					path: variables.installation.path,
+					version: variables.version,
+				});
+			}
+
 			await queryClient.invalidateQueries({
 				queryKey: installedModsQueryKey(variables.installation.path),
 			});
@@ -140,9 +151,11 @@ export function ImportInstallationDialog({ open }: { open: boolean }) {
 						})) as ModInfo | null;
 						if (modInfo) {
 							addModToInstallation({
+								disabled: mod.disabled,
 								emitevent: `import-installation-${installationId}-${mod.id}`,
 								installation: newInstallationObj,
 								mod: modInfo,
+								originalId: mod.id,
 								version: mod.version.trim(),
 							});
 						}

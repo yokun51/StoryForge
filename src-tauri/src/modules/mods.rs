@@ -737,7 +737,12 @@ pub fn get_disabled_mods(path: String) -> Result<Vec<String>, UiError> {
 }
 
 #[command]
-pub fn toggle_mod_state(path: String, modid: String, enable: bool) -> Result<(), UiError> {
+pub fn toggle_mod_state(
+    path: String,
+    modid: String,
+    version: String,
+    enable: bool,
+) -> Result<(), UiError> {
     let clientsettings_path = Path::new(&path).join("clientsettings.json");
     let mut json: Value = if clientsettings_path.exists() {
         let content = std::fs::read_to_string(&clientsettings_path).unwrap_or_default();
@@ -766,10 +771,25 @@ pub fn toggle_mod_state(path: String, modid: String, enable: bool) -> Result<(),
 
     if let Some(arr) = disabled_mods.as_array_mut() {
         if enable {
-            arr.retain(|v| v.as_str() != Some(&modid));
+            // Si on active, on retire le mod de la liste des mods désactivés (format exact ou format @version)
+            arr.retain(|v| {
+                if let Some(s) = v.as_str() {
+                    s != modid && !s.starts_with(&format!("{}@", modid))
+                } else {
+                    true
+                }
+            });
         } else {
-            if !arr.iter().any(|v| v.as_str() == Some(&modid)) {
-                arr.push(json!(modid));
+            // Si on désactive, on l'ajoute (s'il n'y est pas déjà)
+            let already_disabled = arr.iter().any(|v| {
+                if let Some(s) = v.as_str() {
+                    s == modid || s.starts_with(&format!("{}@", modid))
+                } else {
+                    false
+                }
+            });
+            if !already_disabled {
+                arr.push(json!(format!("{}@{}", modid, version)));
             }
         }
     }

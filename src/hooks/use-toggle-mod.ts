@@ -6,8 +6,21 @@ import { disabledModsQueryKey } from "./use-disabled-mods";
 export const useToggleMod = (installationPath: string) => {
 	const queryClient = useQueryClient();
 	return useMutation({
-		mutationFn: ({ modid, enable }: { modid: string; enable: boolean }) =>
-			invoke("toggle_mod_state", { enable, modid, path: installationPath }),
+		mutationFn: ({
+			modid,
+			version,
+			enable,
+		}: {
+			modid: string;
+			version: string;
+			enable: boolean;
+		}) =>
+			invoke("toggle_mod_state", {
+				enable,
+				modid,
+				path: installationPath,
+				version,
+			}),
 		onError: (error) => {
 			toast.error(`Failed to toggle mod: ${error.message}`);
 		},

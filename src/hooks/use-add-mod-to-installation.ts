@@ -13,6 +13,8 @@ export const useAddModToInstallation = (
 			mod: ModInfo;
 			version: string;
 			emitevent: string;
+			originalId?: string;
+			disabled?: boolean;
 		}
 	>,
 ) => {
