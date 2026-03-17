@@ -19,7 +19,8 @@ export type ModsFilters = {
 		| "downloads"
 		| "follows"
 		| "comments"
-		| "updated";
+		| "updated"
+		| "status";
 	setSortBy: (key: ModsFilters["sortBy"]) => void;
 	orderDirection: "ascending" | "descending";
 	setOrderDirection: (direction: ModsFilters["orderDirection"]) => void;

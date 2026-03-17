@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { measureElement, useVirtualizer } from "@tanstack/react-virtual";
 import { invoke } from "@tauri-apps/api/core";
 import { useCallback } from "react";
+import { useDisabledMods } from "@/hooks/use-disabled-mods";
 import { useInstalledMods } from "@/hooks/use-installed-mods";
 import { useModUpdates } from "@/hooks/use-mod-updates";
 import type { Installation } from "@/stores/installations";
@@ -64,6 +65,9 @@ export function ModList({
 	);
 	const { data: instMods } = useInstalledMods(installation.path);
 	const installedMods = instMods?.mods ?? [];
+	const { data: disabledModsData } = useDisabledMods(installation.path);
+	const disabledModsList = disabledModsData || [];
+
 	const { data: modUpdates } = useModUpdates(
 		{
 			installationId: installation.id,
@@ -76,7 +80,6 @@ export function ModList({
 		},
 	);
 
-	// If sortOrder is descending, reverse the modsList
 	const modsList = mods
 		?.filter((mod) => {
 			if (selectedModTags.length > 0) {
@@ -98,53 +101,52 @@ export function ModList({
 					: mod.side === side
 				: installedMods.some(
 						(installedMod) =>
-							installedMod.modid === mod.modid ||
+							installedMod.modid.toString() === mod.modid.toString() ||
 							mod.modidstrs.includes(installedMod.modid.toString()),
 					),
 		)
 		.sort((a, b) => {
-			if (side === "installed") {
-				if (orderDirection === "descending") {
-					return a.side === "both"
-						? -1
-						: b.side === "both"
-							? 1
-							: installedMods.some(
-										(installedMod) =>
-											installedMod.modid === a.modid ||
-											installedMod.modid.toString() === a.urlalias ||
-											a.modidstrs.includes(installedMod.modid.toString()),
-									)
-								? -1
-								: installedMods.some(
-											(installedMod) =>
-												installedMod.modid === b.modid ||
-												installedMod.modid.toString() === b.urlalias ||
-												b.modidstrs.includes(installedMod.modid.toString()),
-										)
-									? 1
-									: 0;
+			if (sortBy === "status") {
+				const aInst = installedMods.find(
+					(instMod) =>
+						instMod.modid.toString() === a.modid.toString() ||
+						a.modidstrs.includes(instMod.modid.toString()),
+				);
+				const bInst = installedMods.find(
+					(instMod) =>
+						instMod.modid.toString() === b.modid.toString() ||
+						b.modidstrs.includes(instMod.modid.toString()),
+				);
+
+				const aDisabled =
+					!aInst ||
+					disabledModsList.some(
+						(d) =>
+							d === aInst.modid.toString() || d.startsWith(`${aInst.modid}@`),
+					);
+				const bDisabled =
+					!bInst ||
+					disabledModsList.some(
+						(d) =>
+							d === bInst.modid.toString() || d.startsWith(`${bInst.modid}@`),
+					);
+
+				// false = 0 (Activé), true = 1 (Désactivé)
+				const aVal = aDisabled ? 1 : 0;
+				const bVal = bDisabled ? 1 : 0;
+
+				if (aVal !== bVal) {
+					// Ascending (Défaut) : Activés (0) en premier
+					// Descending : Désactivés (1) en premier
+					return orderDirection === "descending" ? bVal - aVal : aVal - bVal;
 				}
-				return a.side === "both"
-					? 1
-					: b.side === "both"
-						? -1
-						: installedMods.some(
-									(installedMod) =>
-										installedMod.modid === a.modid ||
-										installedMod.modid.toString() === a.urlalias ||
-										a.modidstrs.includes(installedMod.modid.toString()),
-								)
-							? 1
-							: installedMods.some(
-										(installedMod) =>
-											installedMod.modid === b.modid ||
-											installedMod.modid.toString() === b.urlalias ||
-											b.modidstrs.includes(installedMod.modid.toString()),
-									)
-								? -1
-								: 0;
+				// Si statut égal, on trie par nom en second choix pour que ce soit propre
+				if (orderDirection === "descending") {
+					return b.name.localeCompare(a.name);
+				}
+				return a.name.localeCompare(b.name);
 			}
+
 			if (sortBy === "name") {
 				if (orderDirection === "descending") {
 					return b.name.localeCompare(a.name);
@@ -187,6 +189,7 @@ export function ModList({
 				}
 				return b.comments - a.comments;
 			}
+
 			if (orderDirection === "descending") {
 				return 0;
 			}

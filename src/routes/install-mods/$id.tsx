@@ -36,7 +36,6 @@ export const Route = createFileRoute("/install-mods/$id")({
 		if (!rawInstallation) {
 			throw new Error("Installation not found");
 		}
-		// On nettoie manuellement les espaces au cas où le store serait corrompu
 		const installation = {
 			...rawInstallation,
 			name: rawInstallation.name?.trim() ?? "",
@@ -53,6 +52,7 @@ const sortOptions: Record<ModsFilters["sortBy"], string> = {
 	downloads: "Downloads",
 	follows: "Follows",
 	name: "Name",
+	status: "Status (Active/Inactive)",
 	trending: "Trending",
 	updated: "Last Updated",
 };
@@ -262,7 +262,7 @@ function RouteComponent() {
 				/>
 				<SideToggleGroup />
 
-				{/* SÉLECTEUR TARGET VERSION (Toujours visible) */}
+				{/* SÉLECTEUR TARGET VERSION */}
 				<div className="group relative">
 					<Label className="bg-background text-muted-foreground pointer-events-none absolute start-1 top-0 z-10 block -translate-y-1/2 px-2 text-xs font-medium group-has-disabled:opacity-50">
 						Target Version
@@ -284,7 +284,6 @@ function RouteComponent() {
 					</Select>
 				</div>
 
-				{/* BOUTON IMPORT MODS (Sorti de la condition, donc toujours visible) */}
 				<Button
 					className="h-9"
 					onClick={() => openDialog("ImportModsDialog", { installation })}
@@ -294,7 +293,6 @@ function RouteComponent() {
 					Import Mods
 				</Button>
 
-				{/* BOUTON UPDATE ALL (Visible uniquement dans "Installed") */}
 				{side === "installed" && modUpdates && instMods && (
 					<UpdateAllButton
 						installation={installation}
