@@ -1,11 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { measureElement, useVirtualizer } from "@tanstack/react-virtual";
 import { invoke } from "@tauri-apps/api/core";
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { useDisabledMods } from "@/hooks/use-disabled-mods";
 import { useInstalledMods } from "@/hooks/use-installed-mods";
 import { useLockedMods } from "@/hooks/use-locked-mods";
 import { useModUpdates } from "@/hooks/use-mod-updates";
+import type { OutputMod } from "@/routes/install-mods/$id";
 import type { Installation } from "@/stores/installations";
 import { useModsFilters } from "@/stores/modsFilters";
 import { ModItem } from "../items/mod.item";
@@ -58,12 +59,14 @@ export function ModList({
 		side,
 		category,
 	} = useModsFilters();
+
 	const { data: mods } = useQuery(
 		modsQuery({
 			search: searchText,
 			versions: selectedGameVersions.map((version) => version),
 		}),
 	);
+
 	const { data: instMods } = useInstalledMods(installation.path);
 	const installedMods = instMods?.mods ?? [];
 	const { data: disabledModsData } = useDisabledMods(installation.path);
@@ -83,167 +86,162 @@ export function ModList({
 		},
 	);
 
-	const modsList = mods
-		?.filter((mod) => {
-			if (selectedModTags.length > 0) {
-				return selectedModTags.every((tag) => mod.tags.includes(tag.name));
+	// Optimisation : Création d'une Map O(1) des mods installés (calculée uniquement si instMods change)
+	const installedModMap = useMemo(() => {
+		const map = new Map<number, OutputMod>();
+		if (!mods || installedMods.length === 0) return map;
+
+		for (const mod of mods) {
+			const inst = installedMods.find(
+				(instMod) =>
+					instMod.modid.toString() === mod.modid.toString() ||
+					mod.modidstrs.includes(instMod.modid.toString()) ||
+					(mod.urlalias &&
+						instMod.modid.toString().toLowerCase() ===
+							mod.urlalias.toLowerCase()) ||
+					instMod.name.toLowerCase() === mod.name.toLowerCase(),
+			);
+			if (inst) {
+				map.set(mod.modid, inst);
 			}
-			return true;
-		})
-		?.filter((mod) => {
-			if (author) {
-				return mod.author.toLowerCase().includes(author.toLowerCase());
-			}
-			return true;
-		})
-		?.filter((mod) => mod.type === category)
-		?.filter((mod) =>
-			side !== "installed"
-				? side === "any"
-					? true
-					: mod.side === side
-				: installedMods.some(
-						(installedMod) =>
-							installedMod.modid.toString() === mod.modid.toString() ||
-							mod.modidstrs.includes(installedMod.modid.toString()) ||
-							(mod.urlalias &&
-								installedMod.modid.toString().toLowerCase() ===
-									mod.urlalias.toLowerCase()) ||
-							installedMod.name.toLowerCase() === mod.name.toLowerCase(),
-					),
-		)
-		.sort((a, b) => {
-			if (sortBy === "locked") {
-				// Trouve l'id exact avec lequel le mod a été installé et potentiellement verrouillé
-				const aInst = installedMods.find(
-					(instMod) =>
-						instMod.modid.toString() === a.modid.toString() ||
-						a.modidstrs.includes(instMod.modid.toString()) ||
-						(a.urlalias &&
-							instMod.modid.toString().toLowerCase() ===
-								a.urlalias.toLowerCase()) ||
-						instMod.name.toLowerCase() === a.name.toLowerCase(),
-				);
-				const bInst = installedMods.find(
-					(instMod) =>
-						instMod.modid.toString() === b.modid.toString() ||
-						b.modidstrs.includes(instMod.modid.toString()) ||
-						(b.urlalias &&
-							instMod.modid.toString().toLowerCase() ===
-								b.urlalias.toLowerCase()) ||
-						instMod.name.toLowerCase() === b.name.toLowerCase(),
-				);
+		}
+		return map;
+	}, [mods, installedMods]);
 
-				const aLocked =
-					aInst && lockedModsList.includes(aInst.modid.toString()) ? 1 : 0;
-				const bLocked =
-					bInst && lockedModsList.includes(bInst.modid.toString()) ? 1 : 0;
-
-				if (aLocked !== bLocked) {
-					return orderDirection === "descending"
-						? bLocked - aLocked
-						: aLocked - bLocked;
+	// Optimisation : Le filtrage et le tri lourds mis en cache
+	const modsList = useMemo(() => {
+		return mods
+			?.filter((mod) => {
+				if (selectedModTags.length > 0) {
+					return selectedModTags.every((tag) => mod.tags.includes(tag.name));
 				}
-				if (orderDirection === "descending") {
-					return b.name.localeCompare(a.name);
+				return true;
+			})
+			?.filter((mod) => {
+				if (author) {
+					return mod.author.toLowerCase().includes(author.toLowerCase());
 				}
-				return a.name.localeCompare(b.name);
-			}
+				return true;
+			})
+			?.filter((mod) => mod.type === category)
+			?.filter((mod) =>
+				side !== "installed"
+					? side === "any"
+						? true
+						: mod.side === side
+					: installedModMap.has(mod.modid),
+			)
+			.sort((a, b) => {
+				if (sortBy === "locked") {
+					const aInst = installedModMap.get(a.modid);
+					const bInst = installedModMap.get(b.modid);
 
-			if (sortBy === "status") {
-				const aInst = installedMods.find(
-					(instMod) =>
-						instMod.modid.toString() === a.modid.toString() ||
-						a.modidstrs.includes(instMod.modid.toString()) ||
-						(a.urlalias &&
-							instMod.modid.toString().toLowerCase() ===
-								a.urlalias.toLowerCase()) ||
-						instMod.name.toLowerCase() === a.name.toLowerCase(),
-				);
-				const bInst = installedMods.find(
-					(instMod) =>
-						instMod.modid.toString() === b.modid.toString() ||
-						b.modidstrs.includes(instMod.modid.toString()) ||
-						(b.urlalias &&
-							instMod.modid.toString().toLowerCase() ===
-								b.urlalias.toLowerCase()) ||
-						instMod.name.toLowerCase() === b.name.toLowerCase(),
-				);
+					const aLocked =
+						aInst && lockedModsList.includes(aInst.modid.toString()) ? 1 : 0;
+					const bLocked =
+						bInst && lockedModsList.includes(bInst.modid.toString()) ? 1 : 0;
 
-				const aDisabled =
-					!aInst ||
-					disabledModsList.some(
-						(d) =>
-							d === aInst.modid.toString() || d.startsWith(`${aInst.modid}@`),
-					);
-				const bDisabled =
-					!bInst ||
-					disabledModsList.some(
-						(d) =>
-							d === bInst.modid.toString() || d.startsWith(`${bInst.modid}@`),
-					);
-
-				// false = 0 (Activé), true = 1 (Désactivé)
-				const aVal = aDisabled ? 1 : 0;
-				const bVal = bDisabled ? 1 : 0;
-
-				if (aVal !== bVal) {
-					return orderDirection === "descending" ? bVal - aVal : aVal - bVal;
+					if (aLocked !== bLocked) {
+						return orderDirection === "descending"
+							? bLocked - aLocked
+							: aLocked - bLocked;
+					}
+					if (orderDirection === "descending") {
+						return b.name.localeCompare(a.name);
+					}
+					return a.name.localeCompare(b.name);
 				}
-				if (orderDirection === "descending") {
-					return b.name.localeCompare(a.name);
-				}
-				return a.name.localeCompare(b.name);
-			}
 
-			if (sortBy === "name") {
-				if (orderDirection === "descending") {
-					return b.name.localeCompare(a.name);
+				if (sortBy === "status") {
+					const aInst = installedModMap.get(a.modid);
+					const bInst = installedModMap.get(b.modid);
+
+					const aDisabled =
+						!aInst ||
+						disabledModsList.some(
+							(d) =>
+								d === aInst.modid.toString() || d.startsWith(`${aInst.modid}@`),
+						);
+					const bDisabled =
+						!bInst ||
+						disabledModsList.some(
+							(d) =>
+								d === bInst.modid.toString() || d.startsWith(`${bInst.modid}@`),
+						);
+
+					// false = 0 (Activé), true = 1 (Désactivé)
+					const aVal = aDisabled ? 1 : 0;
+					const bVal = bDisabled ? 1 : 0;
+
+					if (aVal !== bVal) {
+						return orderDirection === "descending" ? bVal - aVal : aVal - bVal;
+					}
+					if (orderDirection === "descending") {
+						return b.name.localeCompare(a.name);
+					}
+					return a.name.localeCompare(b.name);
 				}
-				return a.name.localeCompare(b.name);
-			}
-			if (sortBy === "updated") {
-				if (orderDirection === "descending") {
+
+				if (sortBy === "name") {
+					if (orderDirection === "descending") {
+						return b.name.localeCompare(a.name);
+					}
+					return a.name.localeCompare(b.name);
+				}
+				if (sortBy === "updated") {
+					if (orderDirection === "descending") {
+						return (
+							new Date(b.lastreleased).getTime() -
+							new Date(a.lastreleased).getTime()
+						);
+					}
 					return (
-						new Date(b.lastreleased).getTime() -
-						new Date(a.lastreleased).getTime()
+						new Date(a.lastreleased).getTime() -
+						new Date(b.lastreleased).getTime()
 					);
 				}
-				return (
-					new Date(a.lastreleased).getTime() -
-					new Date(b.lastreleased).getTime()
-				);
-			}
-			if (sortBy === "downloads") {
-				if (orderDirection === "descending") {
-					return a.downloads - b.downloads;
+				if (sortBy === "downloads") {
+					if (orderDirection === "descending") {
+						return a.downloads - b.downloads;
+					}
+					return b.downloads - a.downloads;
 				}
-				return b.downloads - a.downloads;
-			}
-			if (sortBy === "follows") {
-				if (orderDirection === "descending") {
-					return a.follows - b.follows;
+				if (sortBy === "follows") {
+					if (orderDirection === "descending") {
+						return a.follows - b.follows;
+					}
+					return b.follows - a.follows;
 				}
-				return b.follows - a.follows;
-			}
-			if (sortBy === "trending") {
-				if (orderDirection === "descending") {
-					return a.trendingpoints - b.trendingpoints;
+				if (sortBy === "trending") {
+					if (orderDirection === "descending") {
+						return a.trendingpoints - b.trendingpoints;
+					}
+					return b.trendingpoints - a.trendingpoints;
 				}
-				return b.trendingpoints - a.trendingpoints;
-			}
-			if (sortBy === "comments") {
-				if (orderDirection === "descending") {
-					return a.comments - b.comments;
+				if (sortBy === "comments") {
+					if (orderDirection === "descending") {
+						return a.comments - b.comments;
+					}
+					return b.comments - a.comments;
 				}
-				return b.comments - a.comments;
-			}
 
-			if (orderDirection === "descending") {
-				return 0;
-			}
-			return -1;
-		});
+				if (orderDirection === "descending") {
+					return 0;
+				}
+				return -1;
+			});
+	}, [
+		mods,
+		selectedModTags,
+		author,
+		category,
+		side,
+		installedModMap,
+		sortBy,
+		orderDirection,
+		lockedModsList,
+		disabledModsList,
+	]);
 
 	const estimateSize = useCallback(() => 81, []);
 

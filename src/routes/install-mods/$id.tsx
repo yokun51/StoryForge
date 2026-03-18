@@ -264,11 +264,17 @@ function RouteComponent() {
 								: "Sort by"}
 						</SelectTrigger>
 						<SelectContent align="start" alignItemWithTrigger={false}>
-							{Object.entries(sortOptions).map(([key, value]) => (
-								<SelectItem key={key} value={key}>
-									{value}
-								</SelectItem>
-							))}
+							{Object.entries(sortOptions)
+								.filter(
+									([key]) =>
+										side === "installed" ||
+										(key !== "locked" && key !== "status"),
+								)
+								.map(([key, value]) => (
+									<SelectItem key={key} value={key}>
+										{value}
+									</SelectItem>
+								))}
 						</SelectContent>
 					</Select>
 				</div>

@@ -25,6 +25,15 @@ export type ModsFilters = {
 		| "status"
 		| "locked";
 	setSortBy: (key: ModsFilters["sortBy"]) => void;
+	lastSortGlobal:
+		| "created"
+		| "name"
+		| "trending"
+		| "downloads"
+		| "follows"
+		| "comments"
+		| "updated";
+	lastSortInstalled: ModsFilters["sortBy"];
 	orderDirection: "ascending" | "descending";
 	setOrderDirection: (direction: ModsFilters["orderDirection"]) => void;
 	author: string;
@@ -50,7 +59,8 @@ export const useModsFilters = create<ModsFilters>()((set) => ({
 		})),
 	author: "",
 	category: "mod",
-	installedOnly: false,
+	lastSortGlobal: "trending",
+	lastSortInstalled: "status",
 	orderDirection: "ascending",
 	removeAllGameVersions: () => set({ selectedGameVersions: [] }),
 	removeAllModTags: () => set({ selectedModTags: [] }),
@@ -71,8 +81,30 @@ export const useModsFilters = create<ModsFilters>()((set) => ({
 	setCategory: (category) => set({ category }),
 	setOrderDirection: (direction) => set({ orderDirection: direction }),
 	setSearchText: (text) => set({ searchText: text }),
-	setSide: (side) => set({ side }),
-	setSortBy: (key) => set({ sortBy: key }),
+
+	// Met à jour le side et restaure la bonne préférence de tri
+	setSide: (side) =>
+		set((state) => {
+			if (side === "installed") {
+				return { side, sortBy: state.lastSortInstalled };
+			} else {
+				return { side, sortBy: state.lastSortGlobal };
+			}
+		}),
+
+	// Enregistre le tri dans la mémoire appropriée
+	setSortBy: (key) =>
+		set((state) => {
+			if (state.side === "installed") {
+				return { lastSortInstalled: key, sortBy: key };
+			} else {
+				return {
+					lastSortGlobal: key as ModsFilters["lastSortGlobal"],
+					sortBy: key,
+				};
+			}
+		}),
+
 	setTargetUpdateVersion: (version) => set({ targetUpdateVersion: version }),
 	setTargetVersionMode: (mode) => set({ targetVersionMode: mode }),
 	side: "any",
