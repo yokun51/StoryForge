@@ -98,6 +98,11 @@ export function AddInstallationDialog({
 		? [BUNDLED_LOCAL_VERSION, ...officialVersions]
 		: officialVersions;
 
+	// DÉFINITION MANQUANTE AJOUTÉE ICI :
+	const displayVersions = Array.from(
+		new Set([...availableVersions, version?.trim()]),
+	).filter(Boolean) as string[];
+
 	const { mutateAsync: initializeGame, isPending: initializePending } =
 		useMutation({
 			mutationFn: ({
@@ -151,7 +156,7 @@ export function AddInstallationDialog({
 			const actualVersionToInstall = value.version.trim();
 			const finalName = value.name.trim();
 
-			if (useLocalProfile) {
+			if (useLocalProfile && actualVersionToInstall === BUNDLED_LOCAL_VERSION) {
 				const clientSettingsObj = {
 					boolSettings: {
 						allowSettingHRTFaudio: true,
@@ -426,7 +431,9 @@ export function AddInstallationDialog({
 						<DialogTitle className="sm:text-center">
 							Add installation{" "}
 							{useLocalProfile && (
-								<span className="text-warning text-sm">(Local Edition)</span>
+								<span className="text-warning text-sm">
+									(Local Edition Enabled)
+								</span>
 							)}
 						</DialogTitle>
 						<DialogDescription className="sm:text-center">
@@ -704,7 +711,7 @@ export function AddInstallationDialog({
 											</span>
 										</SelectTrigger>
 										<SelectContent align="start" alignItemWithTrigger={false}>
-											{availableVersions.map((version) => (
+											{displayVersions.map((version) => (
 												<SelectItem
 													className={
 														installedVersions.includes(version)
@@ -726,8 +733,12 @@ export function AddInstallationDialog({
 									</Select>
 									{useLocalProfile && (
 										<span className="text-xs text-muted-foreground">
-											The Local Edition is recommended to automatically set your
-											local profile data.
+											The Local Profile feature is <strong>only applied</strong>{" "}
+											when using the{" "}
+											<span className="text-warning-foreground">
+												{BUNDLED_LOCAL_VERSION}
+											</span>{" "}
+											version.
 										</span>
 									)}
 								</div>

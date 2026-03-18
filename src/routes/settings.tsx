@@ -472,9 +472,20 @@ function RouteComponent() {
 										field.handleChange(checked === true)
 									}
 								/>
-								<Label htmlFor="useLocalProfile">
-									Enable Local Profile (automatically creates
-									clientsettings.json on new installations)
+								<Label className="leading-snug" htmlFor="useLocalProfile">
+									Enable Local Profile <br />
+									<span className="text-xs text-muted-foreground font-normal">
+										(Installs version{" "}
+										<strong className="text-warning-foreground">
+											1.21.6-local
+										</strong>
+										. This feature only works on this specific version and will
+										automatically create a{" "}
+										<strong className="text-foreground">
+											clientsettings.json
+										</strong>{" "}
+										file for it.)
+									</span>
 								</Label>
 							</div>
 						)}

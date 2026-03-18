@@ -86,14 +86,47 @@ export function ModList({
 		},
 	);
 
-	// Optimisation : Création d'une Map O(1) des mods installés (calculée uniquement si instMods change)
+	// Optimisation : Création d'une Map O(1) des mods installés
+	// Prend en charge le mode hors-ligne
 	const installedModMap = useMemo(() => {
 		const map = new Map<number, OutputMod>();
-		if (!mods || installedMods.length === 0) return map;
+		if (installedMods.length === 0) return map;
 
-		for (const mod of mods) {
-			const inst = installedMods.find(
-				(instMod) =>
+		// 1. Ajouter les IDs locaux pour le mode hors-ligne
+		for (const inst of installedMods) {
+			map.set(inst.modid, inst);
+		}
+
+		// 2. Associer les vrais IDs API si on est en ligne
+		if (mods) {
+			for (const mod of mods) {
+				const inst = installedMods.find(
+					(instMod) =>
+						instMod.modid.toString() === mod.modid.toString() ||
+						mod.modidstrs.includes(instMod.modid.toString()) ||
+						(mod.urlalias &&
+							instMod.modid.toString().toLowerCase() ===
+								mod.urlalias.toLowerCase()) ||
+						instMod.name.toLowerCase() === mod.name.toLowerCase(),
+				);
+				if (inst) {
+					map.set(mod.modid, inst);
+				}
+			}
+		}
+		return map;
+	}, [mods, installedMods]);
+
+	// Génère la liste de base : mixe les données API (si en ligne) et les données Locales (hors-ligne)
+	const baseModsList = useMemo(() => {
+		if (side !== "installed") {
+			return mods || [];
+		}
+
+		// En mode "Installed", on se base toujours sur les fichiers locaux pour le hors-ligne
+		return installedMods.map((instMod) => {
+			const apiMod = mods?.find(
+				(mod) =>
 					instMod.modid.toString() === mod.modid.toString() ||
 					mod.modidstrs.includes(instMod.modid.toString()) ||
 					(mod.urlalias &&
@@ -101,16 +134,45 @@ export function ModList({
 							mod.urlalias.toLowerCase()) ||
 					instMod.name.toLowerCase() === mod.name.toLowerCase(),
 			);
-			if (inst) {
-				map.set(mod.modid, inst);
-			}
-		}
-		return map;
-	}, [mods, installedMods]);
 
-	// Optimisation : Le filtrage et le tri lourds mis en cache
+			if (apiMod) return apiMod;
+
+			return {
+				assetid: instMod.modid,
+				author: instMod.authors?.[0] || "Unknown",
+				comments: 0,
+				downloads: 0,
+				follows: 0,
+				lastreleased: new Date(0).toISOString(),
+				logo: null,
+				modid: instMod.modid,
+				modidstrs: [instMod.modid.toString()],
+				name: instMod.name,
+				side: "both",
+				summary: "Local/Offline mod",
+				tags: [],
+				trendingpoints: 0,
+				type: "mod",
+				urlalias: null,
+			} as Mod;
+		});
+	}, [mods, installedMods, side]);
+
+	// Filtres et Tri
 	const modsList = useMemo(() => {
-		return mods
+		return baseModsList
+			?.filter((mod) => {
+				// En mode 'installed', on fait la recherche textuelle localement pour le mode offline
+				if (side === "installed" && searchText) {
+					const searchLower = searchText.toLowerCase();
+					return (
+						mod.name.toLowerCase().includes(searchLower) ||
+						mod.author.toLowerCase().includes(searchLower) ||
+						mod.summary.toLowerCase().includes(searchLower)
+					);
+				}
+				return true;
+			})
 			?.filter((mod) => {
 				if (selectedModTags.length > 0) {
 					return selectedModTags.every((tag) => mod.tags.includes(tag.name));
@@ -123,13 +185,17 @@ export function ModList({
 				}
 				return true;
 			})
-			?.filter((mod) => mod.type === category)
-			?.filter((mod) =>
-				side !== "installed"
-					? side === "any"
-						? true
-						: mod.side === side
-					: installedModMap.has(mod.modid),
+			?.filter((mod) => {
+				if (side === "installed" && !mods) return true; // Sécurité hors-ligne
+				return mod.type === category;
+			})
+			?.filter(
+				(mod) =>
+					side !== "installed"
+						? side === "any"
+							? true
+							: mod.side === side
+						: true, // baseModsList est déjà garanti de ne contenir que des installés
 			)
 			.sort((a, b) => {
 				if (sortBy === "locked") {
@@ -169,7 +235,6 @@ export function ModList({
 								d === bInst.modid.toString() || d.startsWith(`${bInst.modid}@`),
 						);
 
-					// false = 0 (Activé), true = 1 (Désactivé)
 					const aVal = aDisabled ? 1 : 0;
 					const bVal = bDisabled ? 1 : 0;
 
@@ -231,11 +296,13 @@ export function ModList({
 				return -1;
 			});
 	}, [
-		mods,
+		baseModsList,
+		searchText,
 		selectedModTags,
 		author,
 		category,
 		side,
+		mods,
 		installedModMap,
 		sortBy,
 		orderDirection,

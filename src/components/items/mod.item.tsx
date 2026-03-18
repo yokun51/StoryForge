@@ -60,6 +60,9 @@ export function ModItem({
 	const listenRef = useRef<UnlistenFn>(null);
 	const emitevent = `mod-download-${mod.modid}-${installation?.id}`;
 
+	// Détecte si le mod est généré localement pour le mode hors-ligne
+	const isLocalOnly = mod.summary === "Local/Offline mod";
+
 	const installedMod = installedMods.find(
 		(i) =>
 			i.modid.toString() === mod.modid.toString() ||
@@ -94,7 +97,7 @@ export function ModItem({
 		: false;
 
 	const { data: modInfo } = useQuery({
-		enabled: !!updateMod || !!installedMod || !installedMod,
+		enabled: !isLocalOnly, // Ne pas lancer la requête si c'est un mod purement local/hors-ligne
 		queryFn: () =>
 			invoke("fetch_mod_info", {
 				modid: mod.modid.toString(),
@@ -103,6 +106,7 @@ export function ModItem({
 		refetchOnMount: false,
 		refetchOnReconnect: false,
 		refetchOnWindowFocus: false,
+		retry: false, // Évite que react-query boucle indéfiniment si on n'a pas internet
 	});
 
 	const { openDialog } = useDialogStore();
@@ -224,6 +228,9 @@ export function ModItem({
 			<div className="flex flex-row gap-2">
 				<a
 					href={`https://mods.vintagestory.at/${mod.urlalias ?? `show/mod/${mod.assetid}`}`}
+					onClick={(e) => {
+						if (isLocalOnly) e.preventDefault(); // Désactive le lien si hors-ligne
+					}}
 					rel="noreferrer"
 					target="_blank"
 				>
@@ -231,6 +238,10 @@ export function ModItem({
 						alt={mod.name}
 						className="w-12 h-12 rounded hover:scale-105 transition-transform"
 						loading="lazy"
+						onError={(e) => {
+							// Image de secours si pas d'internet
+							e.currentTarget.src = "/StoryForge.png";
+						}}
 						src={
 							mod.logo ?? "https://mods.vintagestory.at/web/img/mod-default.png"
 						}
@@ -239,8 +250,11 @@ export function ModItem({
 				<div className="flex flex-col justify-center">
 					<div className="flex gap-1 items-center">
 						<a
-							className="hover:underline font-semibold"
+							className={cn("font-semibold", !isLocalOnly && "hover:underline")}
 							href={`https://mods.vintagestory.at/${mod.urlalias ?? `show/mod/${mod.assetid}`}`}
+							onClick={(e) => {
+								if (isLocalOnly) e.preventDefault();
+							}}
 							rel="noreferrer"
 							target="_blank"
 						>
@@ -270,9 +284,13 @@ export function ModItem({
 						{mod.summary}
 					</p>
 					<div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted-foreground mt-1 items-center">
-						<span>{mod.downloads} dl</span>
-						<span>{mod.follows} follows</span>
-						<span className="text-muted-foreground/30">|</span>
+						{!isLocalOnly && (
+							<>
+								<span>{mod.downloads} dl</span>
+								<span>{mod.follows} follows</span>
+								<span className="text-muted-foreground/30">|</span>
+							</>
+						)}
 
 						{installedMod ? (
 							<>
@@ -322,6 +340,7 @@ export function ModItem({
 							onCheckedChange={(checked) => {
 								toggleMod({
 									enable: checked,
+									// Assure-toi qu'on utilise bien le vrai ID stocké en local
 									modid: installedMod.modid.toString(),
 									version: installedMod.version,
 								});
@@ -381,7 +400,7 @@ export function ModItem({
 							<GroupSeparator />
 						</Tooltip>
 					)}
-					{!installedMod && installation && (
+					{!installedMod && installation && modInfo && (
 						<Tooltip>
 							<TooltipTrigger
 								render={
@@ -451,38 +470,43 @@ export function ModItem({
 							<GroupSeparator />
 						</Tooltip>
 					)}
-					{installation && installedMod && (
-						<Tooltip>
-							<TooltipTrigger
-								render={
-									<GroupItem
-										render={
-											<Button
-												aria-label="Update"
-												onClick={() =>
-													openDialog("UpdateModDialog", {
-														installation,
-														mod: installedMod,
-														versionFrom: installedMod.version,
-													})
-												}
-												size="icon"
-												variant="outline"
+
+					{/* Masque le bouton Update si on est hors-ligne car on ne pourrait pas lister les versions */}
+					{installation &&
+						installedMod &&
+						modInfo &&
+						modInfo.mod.releases.length > 0 && (
+							<Tooltip>
+								<TooltipTrigger
+									render={
+										<GroupItem
+											render={
+												<Button
+													aria-label="Update"
+													onClick={() =>
+														openDialog("UpdateModDialog", {
+															installation,
+															mod: installedMod,
+															versionFrom: installedMod.version,
+														})
+													}
+													size="icon"
+													variant="outline"
+												/>
+											}
+										>
+											<PackageSearchIcon
+												aria-hidden="true"
+												className="opacity-60"
+												size={16}
 											/>
-										}
-									>
-										<PackageSearchIcon
-											aria-hidden="true"
-											className="opacity-60"
-											size={16}
-										/>
-									</GroupItem>
-								}
-							/>
-							<TooltipContent>Look through available versions</TooltipContent>
-							<GroupSeparator />
-						</Tooltip>
-					)}
+										</GroupItem>
+									}
+								/>
+								<TooltipContent>Look through available versions</TooltipContent>
+								<GroupSeparator />
+							</Tooltip>
+						)}
 					{installation &&
 						(installedMod ? (
 							<Tooltip>
@@ -515,34 +539,37 @@ export function ModItem({
 								<TooltipContent>Remove</TooltipContent>
 							</Tooltip>
 						) : (
-							<Tooltip>
-								<TooltipTrigger
-									render={
-										<GroupItem
-											render={
-												<Button
-													aria-label="Add Mod"
-													onClick={() =>
-														openDialog("AddModDialog", {
-															installation,
-															modid: mod.modid,
-														})
-													}
-													size="icon"
-													variant="outline"
+							// Masque le bouton Add Mod si hors-ligne car impossible à télécharger
+							modInfo && (
+								<Tooltip>
+									<TooltipTrigger
+										render={
+											<GroupItem
+												render={
+													<Button
+														aria-label="Add Mod"
+														onClick={() =>
+															openDialog("AddModDialog", {
+																installation,
+																modid: mod.modid,
+															})
+														}
+														size="icon"
+														variant="outline"
+													/>
+												}
+											>
+												<PackagePlusIcon
+													aria-hidden="true"
+													className="opacity-60"
+													size={16}
 												/>
-											}
-										>
-											<PackagePlusIcon
-												aria-hidden="true"
-												className="opacity-60"
-												size={16}
-											/>
-										</GroupItem>
-									}
-								/>
-								<TooltipContent>Add Mod</TooltipContent>
-							</Tooltip>
+											</GroupItem>
+										}
+									/>
+									<TooltipContent>Add Mod</TooltipContent>
+								</Tooltip>
+							)
 						))}
 				</Group>
 			</div>

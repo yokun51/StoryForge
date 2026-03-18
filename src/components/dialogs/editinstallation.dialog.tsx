@@ -117,7 +117,8 @@ export function EditInstallationDialog({
 				}
 			}
 
-			if (useLocalProfile) {
+			// Ne générer le clientsettings local QUE si la version choisie est la 1.21.6-local
+			if (useLocalProfile && actualVersionToInstall === BUNDLED_LOCAL_VERSION) {
 				const clientSettingsObj = {
 					boolSettings: {
 						allowSettingHRTFaudio: true,
@@ -366,7 +367,6 @@ export function EditInstallationDialog({
 						const safeName = makeStringFolderSafe(finalName);
 						const oldSafeName = makeStringFolderSafe(installation.name);
 						if (safeName === oldSafeName) {
-							// FIX ICI : fermer la boîte de dialogue même si on ne renomme pas le dossier !
 							closeDialog();
 							return;
 						}
@@ -696,8 +696,12 @@ export function EditInstallationDialog({
 									</Select>
 									{useLocalProfile && (
 										<span className="text-xs text-muted-foreground">
-											Select the local edition to deploy your local profile
-											configuration.
+											The Local Profile feature is <strong>only applied</strong>{" "}
+											when using the{" "}
+											<span className="text-warning-foreground">
+												{BUNDLED_LOCAL_VERSION}
+											</span>{" "}
+											version.
 										</span>
 									)}
 								</div>
