@@ -18,6 +18,7 @@ pub fn run() {
                 .plugin(
                     tauri_plugin_zustand::Builder::new()
                         .path(store_path)
+                        .add_store("modsFilters")
                         .build(),
                 )
                 .map_err(|e| {

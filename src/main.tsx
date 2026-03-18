@@ -5,6 +5,7 @@ import { SidebarProvider } from "./components/ui/sidebar";
 import { routeTree } from "./routeTree.gen";
 import { tauriAccountsHandler } from "./stores/accounts";
 import { tauriInstallationsHandler } from "./stores/installations";
+import { tauriModsFiltersHandler } from "./stores/modsFilters";
 import { tauriServersHandler } from "./stores/servers";
 import { tauriSettingsHandler } from "./stores/settings";
 
@@ -19,6 +20,7 @@ if (dark) {
 await tauriServersHandler.start();
 await tauriAccountsHandler.start();
 await tauriInstallationsHandler.start();
+await tauriModsFiltersHandler.start();
 
 const queryClient = new QueryClient();
 const router = createRouter({
