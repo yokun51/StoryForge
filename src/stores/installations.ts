@@ -3,6 +3,12 @@ import { toast } from "sonner";
 import { create } from "zustand/react";
 import { makeStringFolderSafe, pathDelimiter } from "@/lib/utils";
 
+export type ModProfile = {
+	id: string;
+	name: string;
+	disabledMods: string[];
+};
+
 export type Installation = {
 	id: number;
 	name: string;
@@ -14,6 +20,7 @@ export type Installation = {
 	startParams: string;
 	icon: string | null;
 	favorite: boolean;
+	modProfiles?: ModProfile[];
 };
 
 type InstallationsStore = {

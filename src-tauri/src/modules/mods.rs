@@ -809,3 +809,45 @@ pub fn toggle_mod_state(
     })?;
     Ok(())
 }
+
+#[command]
+pub fn set_disabled_mods(path: String, disabled_mods: Vec<String>) -> Result<(), UiError> {
+    let clientsettings_path = Path::new(&path).join("clientsettings.json");
+    let mut json: Value = if clientsettings_path.exists() {
+        let content = std::fs::read_to_string(&clientsettings_path).unwrap_or_default();
+        serde_json::from_str(&content).unwrap_or(json!({}))
+    } else {
+        json!({})
+    };
+
+    if !json.is_object() {
+        json = json!({});
+    }
+
+    let obj = json.as_object_mut().unwrap();
+
+    let string_list_settings = obj.entry("stringListSettings").or_insert(json!({}));
+    if !string_list_settings.is_object() {
+        *string_list_settings = json!({});
+    }
+
+    let settings_obj = string_list_settings.as_object_mut().unwrap();
+    let json_disabled_mods: Vec<Value> = disabled_mods.into_iter().map(Value::String).collect();
+
+    settings_obj.insert("disabledMods".to_string(), Value::Array(json_disabled_mods));
+
+    let content = to_string_pretty(&json).map_err(|e| UiError {
+        name: "serialize_error".into(),
+        message: format!("Failed to serialize: {}", e),
+    })?;
+
+    if let Some(parent) = clientsettings_path.parent() {
+        std::fs::create_dir_all(parent).ok();
+    }
+
+    std::fs::write(&clientsettings_path, content).map_err(|e| UiError {
+        name: "write_error".into(),
+        message: format!("Failed to write: {}", e),
+    })?;
+    Ok(())
+}

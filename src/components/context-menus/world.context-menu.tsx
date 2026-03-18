@@ -37,21 +37,18 @@ export const WorldContextMenu = ({
 }) => {
 	const navigate = useNavigate();
 
-	// Stores
 	const { installations } = useInstallations();
 	const installation = installations.find(
 		(installation) =>
-			installation.path.split("/").pop() === world.installation_name,
+			installation.path.split(/[/\\]/).pop() === world.installation_name,
 	);
 	const { openDialog } = useDialogStore();
 
-	// Mutations
 	const { mutate: revealInstallationInFolder } = useRevealInFolder();
 	const { mutate: launchInstallation } = usePlayInstallation();
 	const { mutate: downloadVersion } = useDownloadVersion();
 	const { mutate: backupWorld, isPending: isBackingUp } = useBackupWorld();
 
-	// Queries
 	const { data: installedVersions } = useInstalledVersions();
 
 	return (
@@ -65,7 +62,12 @@ export const WorldContextMenu = ({
 					{installation && installedVersions?.includes(installation.version) ? (
 						<ContextMenuItem
 							className="flex items-center justify-between gap-4"
-							onClick={() => launchInstallation({ id: installation.id })}
+							onClick={() =>
+								launchInstallation({
+									id: installation.id,
+									save: world.path.split(/[/\\]/).pop()?.replace(".vcdbs", ""),
+								})
+							}
 						>
 							Launch
 							<PlayIcon className="inline-block h-4 w-4" />

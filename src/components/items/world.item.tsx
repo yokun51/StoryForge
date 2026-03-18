@@ -32,7 +32,7 @@ export const WorldItem = ({ world }: { world: World }) => {
 	const worldData = world.data;
 	const installation = installations.find(
 		(installation) =>
-			installation.path.split("/").pop() === world.installation_name,
+			installation.path.split(/[/\\]/).pop() === world.installation_name,
 	);
 	const version = versions?.find((v) => v === installation?.version);
 	const { mutate: installVersion, isPending: isInstalling } =
@@ -130,7 +130,7 @@ export const WorldItem = ({ world }: { world: World }) => {
 													options: {
 														installation_id: installation.id,
 														save: world.path
-															.split("/")
+															.split(/[/\\]/)
 															.pop()
 															?.replace(".vcdbs", ""),
 													},

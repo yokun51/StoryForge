@@ -1,7 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { FolderDownIcon } from "lucide-react";
-import { useRef } from "react";
+import { FolderDownIcon, SaveIcon, TrashIcon } from "lucide-react";
+import { useRef, useState } from "react";
+import { toast } from "sonner";
 import { AuthorAutocomplete } from "@/components/auto-completes/author.auto-complete";
 import { UpdateAllButton } from "@/components/buttons/update-all.button";
 import { SearchInput } from "@/components/inputs";
@@ -18,12 +19,17 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
+import { useDisabledMods } from "@/hooks/use-disabled-mods";
 import { useInstalledMods } from "@/hooks/use-installed-mods";
 import { useModUpdates } from "@/hooks/use-mod-updates";
+import { useSetDisabledMods } from "@/hooks/use-set-disabled-mods";
 import { gameVersionsQuery, modTagsQuery } from "@/lib/queries";
 import { cn, compareSemverDesc } from "@/lib/utils";
 import { useDialogStore } from "@/stores/dialogs";
-import { useInstallationsStore } from "@/stores/installations";
+import {
+	useInstallations,
+	useInstallationsStore,
+} from "@/stores/installations";
 import { type ModsFilters, useModsFilters } from "@/stores/modsFilters";
 
 export const Route = createFileRoute("/install-mods/$id")({
@@ -72,13 +78,26 @@ export type OutputMod = {
 };
 
 function RouteComponent() {
-	const { installation } = Route.useLoaderData();
+	const { installation: loadedInstallation } = Route.useLoaderData();
+	const { updateInstallation } = useInstallations();
+
+	const installation =
+		useInstallationsStore((s) =>
+			s.installations.find((i) => i.id === loadedInstallation.id),
+		) || loadedInstallation;
+
 	const { openDialog } = useDialogStore();
 	const { data: gameVersions } = useQuery(gameVersionsQuery);
 	const { data: modTags } = useQuery(modTagsQuery);
 	const { data: instMods } = useInstalledMods(installation.path, {
 		staleTime: Infinity,
 	});
+	const { data: disabledMods } = useDisabledMods(installation.path);
+	const { mutate: setDisabledMods } = useSetDisabledMods(installation.path);
+
+	const [selectedProfileId, setSelectedProfileId] = useState<string | null>(
+		null,
+	);
 
 	const {
 		selectedGameVersions,
@@ -189,7 +208,7 @@ function RouteComponent() {
 							?.sort((a, b) => a.name.localeCompare(b.name))
 							.map((tag) => (
 								<SelectItem
-									key={tag.tagid}
+									key={tag.tagid.toString()}
 									onClick={() =>
 										selectedModTags.includes(tag)
 											? removeModTag(tag)
@@ -284,8 +303,90 @@ function RouteComponent() {
 					</Select>
 				</div>
 
+				{/* SÉLECTEUR DE PROFILS DE MODS */}
+				<div className="flex items-center gap-2 border-l border-border pl-2 ml-1">
+					<Select
+						onValueChange={(val) =>
+							setSelectedProfileId(val === "none" ? null : val)
+						}
+						value={selectedProfileId ?? "none"}
+					>
+						<SelectTrigger className="w-40 h-9">
+							{selectedProfileId && selectedProfileId !== "none"
+								? installation.modProfiles?.find(
+										(p) => p.id === selectedProfileId,
+									)?.name
+								: "Mod Profiles"}
+						</SelectTrigger>
+						<SelectContent>
+							{!installation.modProfiles ||
+							installation.modProfiles.length === 0 ? (
+								<p className="text-xs text-muted-foreground p-2">
+									No profiles yet
+								</p>
+							) : (
+								<>
+									<SelectItem value="none">None</SelectItem>
+									{installation.modProfiles.map((p) => (
+										<SelectItem key={p.id} value={p.id}>
+											{p.name}
+										</SelectItem>
+									))}
+								</>
+							)}
+						</SelectContent>
+					</Select>
+					{selectedProfileId && selectedProfileId !== "none" && (
+						<>
+							<Button
+								className="h-9"
+								onClick={() => {
+									const profile = installation.modProfiles?.find(
+										(p) => p.id === selectedProfileId,
+									);
+									if (profile) setDisabledMods(profile.disabledMods);
+								}}
+								size="sm"
+								variant="outline"
+							>
+								Apply
+							</Button>
+							<Button
+								className="h-9"
+								onClick={() => {
+									updateInstallation({
+										...installation,
+										modProfiles: installation.modProfiles?.filter(
+											(p) => p.id !== selectedProfileId,
+										),
+									});
+									setSelectedProfileId(null);
+									toast.success("Profile deleted");
+								}}
+								size="icon"
+								variant="destructive-outline"
+							>
+								<TrashIcon className="size-4" />
+							</Button>
+						</>
+					)}
+					<Button
+						className="h-9"
+						onClick={() =>
+							openDialog("SaveModProfileDialog", {
+								disabledMods: disabledMods ?? [],
+								installation,
+							})
+						}
+						size="sm"
+						variant="outline"
+					>
+						<SaveIcon className="size-4 mr-2" /> Save Profile
+					</Button>
+				</div>
+
 				<Button
-					className="h-9"
+					className="h-9 ml-2"
 					onClick={() => openDialog("ImportModsDialog", { installation })}
 					variant="outline"
 				>

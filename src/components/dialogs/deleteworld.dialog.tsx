@@ -34,10 +34,14 @@ export function DeleteWorldDialog({
 	const { mutate: removeWorld, isPending } = useMutation({
 		mutationFn: (world: World) =>
 			invoke("remove_world", { worldPath: world.path }),
-		onError: (error) => {
-			toast.error(`Failed to delete world ${world.data.world_name}: ${error}`, {
-				id: `world-delete-${world.data.world_name}`,
-			});
+		onError: (error: Error) => {
+			// FIX: On affiche error.message au lieu de l'objet d'erreur brut
+			toast.error(
+				`Failed to delete world ${world.data.world_name}: ${error.message || error}`,
+				{
+					id: `world-delete-${world.data.world_name}`,
+				},
+			);
 		},
 		onMutate: () => {
 			toast.loading(`Deleting world ${world.data.world_name}...`, {
@@ -137,7 +141,6 @@ export function DeleteWorldDialog({
 						</li>
 					</ul>
 				</motion.div>
-				{/* Add a checkbox asking if they're absolutely sure */}
 				<div className="flex items-center">
 					<Checkbox
 						checked={sure}

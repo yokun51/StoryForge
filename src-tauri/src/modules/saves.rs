@@ -328,39 +328,50 @@ pub fn remove_world(world_path: String) -> Result<(), UiError> {
         });
     }
 
-    let conn = rusqlite::Connection::open(world_path)
-        .map_err(|e| UiError::from(format!("DB open error: {e}")))?;
-    let mut stmt = conn
-        .prepare("SELECT data FROM gamedata LIMIT 1")
-        .map_err(|e| UiError::from(format!("DB prepare error: {e}")))?;
+    // Isolate the database connection in its own scope so it is dropped (and the file lock released)
+    // BEFORE we attempt to remove the file!
+    let maps_path_to_remove = {
+        let conn = rusqlite::Connection::open(world_path)
+            .map_err(|e| UiError::from(format!("DB open error: {e}")))?;
+        let mut stmt = conn
+            .prepare("SELECT data FROM gamedata LIMIT 1")
+            .map_err(|e| UiError::from(format!("DB prepare error: {e}")))?;
 
-    let mut rows = stmt
-        .query([])
-        .map_err(|e| UiError::from(format!("DB query error: {e}")))?;
-    if let Some(row) = rows
-        .next()
-        .map_err(|e| UiError::from(format!("DB row error: {e}")))?
-    {
-        let data: Vec<u8> = row
-            .get(0)
-            .map_err(|e| UiError::from(format!("DB get error: {e}")))?;
-        let gamedata = GameData::decode(data.as_slice())
-            .map_err(|e| UiError::from(format!("Protobuf decode error: {e}")))?;
+        let mut rows = stmt
+            .query([])
+            .map_err(|e| UiError::from(format!("DB query error: {e}")))?;
 
-        let maps_path = Path::new(&world_path)
-            .parent()
-            .and_then(|p| p.parent())
-            .map(|p| {
-                p.join("Maps")
-                    .join(format!("{}.db", gamedata.savegame_identifier))
-            });
-        if let Some(maps_path) = maps_path {
-            if maps_path.exists() && maps_path.is_file() {
-                remove_file(maps_path)
-                    .map_err(|e| UiError::from(format!("Remove file error: {e}")))?;
-            }
+        if let Some(row) = rows
+            .next()
+            .map_err(|e| UiError::from(format!("DB row error: {e}")))?
+        {
+            let data: Vec<u8> = row
+                .get(0)
+                .map_err(|e| UiError::from(format!("DB get error: {e}")))?;
+            let gamedata = GameData::decode(data.as_slice())
+                .map_err(|e| UiError::from(format!("Protobuf decode error: {e}")))?;
+
+            Path::new(&world_path)
+                .parent()
+                .and_then(|p| p.parent())
+                .map(|p| {
+                    p.join("Maps")
+                        .join(format!("{}.db", gamedata.savegame_identifier))
+                })
+        } else {
+            None
+        }
+    }; // Connection is dropped here, file is unlocked!
+
+    // Now delete the map file if it exists
+    if let Some(maps_path) = maps_path_to_remove {
+        if maps_path.exists() && maps_path.is_file() {
+            remove_file(maps_path)
+                .map_err(|e| UiError::from(format!("Remove map file error: {e}")))?;
         }
     }
+
+    // Delete the world save file
     remove_file(world_path).map_err(|e| UiError::from(format!("Remove file error: {e}")))?;
     Ok(())
 }

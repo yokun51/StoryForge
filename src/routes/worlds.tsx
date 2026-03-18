@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
+import { z } from "zod";
 import { SearchInput } from "@/components/inputs";
 import { WorldList } from "@/components/lists/world.list";
 import { ErrorComponent } from "@/components/ui/error";
@@ -16,19 +17,21 @@ import { useInstallations } from "@/stores/installations";
 export const Route = createFileRoute("/worlds")({
 	component: RouteComponent,
 	errorComponent: ErrorComponent,
+	validateSearch: z.object({
+		installationId: z.number().optional().catch(undefined),
+	}),
 });
 
 function RouteComponent() {
-	// States
+	const search = Route.useSearch();
+
 	const [searchText, setSearchText] = useState("");
 	const [selectedInstallationId, setSelectedInstallationId] = useState<
 		number | null
-	>(null);
+	>(search.installationId ?? null);
 
-	// Stores
 	const { installations } = useInstallations();
 
-	// Queries
 	const { data: worlds } = useSaves();
 	const filteredWorlds = worlds?.filter((world) => {
 		const matchesSearchText = world.data.world_name
@@ -37,7 +40,7 @@ function RouteComponent() {
 		const matchesInstallation = selectedInstallationId
 			? installations.find(
 					(installation) =>
-						installation.path.split("/").pop() === world.installation_name,
+						installation.path.split(/[/\\]/).pop() === world.installation_name,
 				)?.id === selectedInstallationId
 			: true;
 		return matchesSearchText && matchesInstallation;
@@ -54,7 +57,12 @@ function RouteComponent() {
 					placeholder="Search worlds..."
 					value={searchText}
 				/>
-				<Select value={selectedInstallationId?.toString() || ""}>
+				<Select
+					onValueChange={(val) =>
+						setSelectedInstallationId(val === "all" ? null : Number(val))
+					}
+					value={selectedInstallationId?.toString() || "all"}
+				>
 					<SelectTrigger
 						className={cn(
 							"w-46",
@@ -63,17 +71,13 @@ function RouteComponent() {
 					>
 						{selectedInstallationId
 							? `${installations.find((installation) => installation.id === selectedInstallationId)?.name}`
-							: "Select installation"}
+							: "All installations"}
 					</SelectTrigger>
 					<SelectContent alignItemWithTrigger={false}>
+						<SelectItem value="all">All installations</SelectItem>
 						{installations.map((installation) => (
 							<SelectItem
 								key={installation.id}
-								onClick={() =>
-									setSelectedInstallationId((prev) =>
-										prev === installation.id ? null : installation.id,
-									)
-								}
 								value={installation.id.toString()}
 							>
 								{installation.name}

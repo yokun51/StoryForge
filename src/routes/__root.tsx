@@ -24,6 +24,7 @@ import { EditWorldDialog } from "@/components/dialogs/editworld.dialog";
 import { ImportInstallationDialog } from "@/components/dialogs/importinstallation.dialog";
 import { ImportModsDialog } from "@/components/dialogs/importmods.dialog";
 import { RemoveModDialog } from "@/components/dialogs/removemod.dialog";
+import { SaveModProfileDialog } from "@/components/dialogs/savemodprofile.dialog";
 import { UpdateModDialog } from "@/components/dialogs/updatemod.dialog";
 import { ViewMapDialog } from "@/components/dialogs/viewmap.dialog";
 import { SidebarTrigger } from "@/components/ui/sidebar";
@@ -197,6 +198,14 @@ function RootComponent() {
 					{...((active?.key === "ImportModsDialog"
 						? active.props
 						: {}) as DialogMap["ImportModsDialog"])}
+				/>
+			)}
+			{active?.key === "SaveModProfileDialog" && (
+				<SaveModProfileDialog
+					open={active?.key === "SaveModProfileDialog"}
+					{...((active?.key === "SaveModProfileDialog"
+						? active.props
+						: {}) as DialogMap["SaveModProfileDialog"])}
 				/>
 			)}
 			<Toaster richColors theme={darkMode ? "dark" : "light"} />
