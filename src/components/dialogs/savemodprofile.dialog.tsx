@@ -19,26 +19,42 @@ import { type Installation, useInstallations } from "@/stores/installations";
 export type SaveModProfileDialogProps = {
 	installation: Installation;
 	disabledMods: string[];
+	prefilledName?: string;
 };
 
 export function SaveModProfileDialog({
 	open,
 	installation,
 	disabledMods,
+	prefilledName = "",
 }: { open: boolean } & SaveModProfileDialogProps) {
 	const { closeDialog } = useDialogStore();
 	const { updateInstallation } = useInstallations();
 
 	const form = useForm({
-		defaultValues: { name: "" },
+		defaultValues: { name: prefilledName },
 		onSubmit: ({ value }) => {
-			const newProfile = {
-				disabledMods: [...disabledMods],
-				id: Date.now().toString(),
-				name: value.name.trim(),
-			};
+			const existingIndex = (installation.modProfiles || []).findIndex(
+				(p) => p.name.toLowerCase() === value.name.trim().toLowerCase(),
+			);
 
-			const updatedProfiles = [...(installation.modProfiles || []), newProfile];
+			const updatedProfiles = [...(installation.modProfiles || [])];
+
+			if (existingIndex >= 0) {
+				// Met à jour le profil existant
+				updatedProfiles[existingIndex] = {
+					...updatedProfiles[existingIndex],
+					disabledMods: [...disabledMods],
+				};
+			} else {
+				// Crée un nouveau profil
+				const newProfile = {
+					disabledMods: [...disabledMods],
+					id: Date.now().toString(),
+					name: value.name.trim(),
+				};
+				updatedProfiles.push(newProfile);
+			}
 
 			updateInstallation(
 				{
@@ -68,6 +84,7 @@ export function SaveModProfileDialog({
 					<DialogTitle>Save Mod Profile</DialogTitle>
 					<DialogDescription>
 						Give a name to your current configuration of enabled/disabled mods.
+						If you use an existing profile name, it will be updated.
 					</DialogDescription>
 				</DialogHeader>
 

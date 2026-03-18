@@ -109,6 +109,18 @@ function RouteComponent() {
 		installation.targetVersion || installation.version
 	).replace("-local", "");
 
+	// Profil actif et état de vérification (pour voir si les mods actuels correspondent exactement au profil)
+	const activeProfile = installation.modProfiles?.find(
+		(p) => p.id === selectedProfileId,
+	);
+
+	const isProfileApplied =
+		!!activeProfile &&
+		!!disabledMods &&
+		disabledMods.length === activeProfile.disabledMods.length &&
+		disabledMods.every((m) => activeProfile.disabledMods.includes(m)) &&
+		activeProfile.disabledMods.every((m) => disabledMods.includes(m));
+
 	const {
 		selectedGameVersions,
 		selectedModTags,
@@ -358,9 +370,7 @@ function RouteComponent() {
 						<SelectTrigger className="w-48 max-w-48 h-9 overflow-hidden">
 							<span className="truncate block text-left w-full pr-2">
 								{selectedProfileId && selectedProfileId !== "none"
-									? installation.modProfiles?.find(
-											(p) => p.id === selectedProfileId,
-										)?.name
+									? activeProfile?.name
 									: "Mod Profiles"}
 							</span>
 						</SelectTrigger>
@@ -386,16 +396,15 @@ function RouteComponent() {
 						<>
 							<Button
 								className="h-9"
+								disabled={isProfileApplied}
 								onClick={() => {
-									const profile = installation.modProfiles?.find(
-										(p) => p.id === selectedProfileId,
-									);
-									if (profile) setDisabledMods(profile.disabledMods);
+									if (activeProfile)
+										setDisabledMods(activeProfile.disabledMods);
 								}}
 								size="sm"
 								variant="outline"
 							>
-								Apply
+								{isProfileApplied ? "Applied" : "Apply"}
 							</Button>
 							<Button
 								className="h-9"
@@ -422,6 +431,7 @@ function RouteComponent() {
 							openDialog("SaveModProfileDialog", {
 								disabledMods: disabledMods ?? [],
 								installation,
+								prefilledName: activeProfile?.name || "",
 							})
 						}
 						size="sm"
