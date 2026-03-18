@@ -1,8 +1,8 @@
 use serde::Deserialize;
 use serde_json::{from_str, from_value, json, to_string_pretty, Value};
 use std::{
-    fs::{create_dir_all, remove_dir_all, write, File},
-    io::{BufRead, BufReader, Read},
+    fs::{create_dir_all, remove_dir_all, write},
+    io::{BufRead, BufReader},
     path::{Path, PathBuf},
     process::{Command, Stdio},
     sync::{
@@ -18,6 +18,49 @@ use walkdir::WalkDir;
 
 use super::errors::UiError;
 use super::utils::{installations_subdir, move_folder, versions_folder, versions_subdir};
+
+// Synchronise de force les ModPaths dans les configurations pour pointer sur ce dossier
+fn sync_installation_paths(pb: &Path) {
+    let mods_path = pb.join("Mods").to_string_lossy().into_owned();
+
+    // 1. clientsettings.json
+    let settings_path = pb.join("clientsettings.json");
+    let mut clientsettings: Value = if settings_path.exists() {
+        let content = std::fs::read_to_string(&settings_path).unwrap_or_else(|_| "{}".to_string());
+        from_str(&content).unwrap_or(json!({}))
+    } else {
+        json!({})
+    };
+
+    if let Some(obj) = clientsettings.as_object_mut() {
+        let string_list_settings = obj.entry("stringListSettings").or_insert(json!({}));
+        if let Some(sls) = string_list_settings.as_object_mut() {
+            sls.insert("modPaths".into(), json!(["Mods", mods_path.clone()]));
+        }
+    }
+    std::fs::create_dir_all(settings_path.parent().unwrap()).ok();
+    let _ = write(&settings_path, to_string_pretty(&clientsettings).unwrap());
+
+    // 2. serverconfig.json
+    let serverconfig_path = pb.join("serverconfig.json");
+    if serverconfig_path.exists() {
+        if let Ok(content) = std::fs::read_to_string(&serverconfig_path) {
+            if let Ok(mut serverconfig) = from_str::<Value>(&content) {
+                if let Some(obj) = serverconfig.as_object_mut() {
+                    obj.insert("ModPaths".into(), json!(["Mods", mods_path.clone()]));
+
+                    // Vide l'emplacement de sauvegarde pour éviter de charger le monde de l'ancienne installation
+                    if let Some(world_config) =
+                        obj.get_mut("WorldConfig").and_then(|w| w.as_object_mut())
+                    {
+                        world_config.insert("SaveFileLocation".into(), json!(""));
+                    }
+                }
+                let _ = write(&serverconfig_path, to_string_pretty(&serverconfig).unwrap());
+            }
+        }
+    }
+}
 
 #[command]
 pub async fn initialize_game(
@@ -126,6 +169,11 @@ pub fn play_game(app: AppHandle, options: Option<PlayGameParams>) -> Result<Stri
             message: format!("Launch file not found: {}", combined_path.to_string_lossy()),
         });
     }
+
+    // Synchronisation forcée avant de lancer le jeu (Sécurité)
+    sync_installation_paths(&pb);
+
+    // Application du profil utilisateur sélectionné s'il existe
     let account_result = app.zustand().get::<Value>("accounts", "selectedUser");
     let account = match account_result {
         Ok(val) if !val.is_null() => Some(val),
@@ -133,73 +181,31 @@ pub fn play_game(app: AppHandle, options: Option<PlayGameParams>) -> Result<Stri
     };
 
     if let Some(account) = account {
-        let settings = json!({
-            "stringSettings": {
-                "playeruid": account["uid"].as_str().unwrap_or(""),
-                "sessionkey": account["sessionkey"].as_str().unwrap_or(""),
-                "sessionsignature": account["sessionsignature"].as_str().unwrap_or(""),
-                "playername": account["playername"].as_str().unwrap_or(""),
-            }
-        });
         let settings_path = pb.join("clientsettings.json");
-        // It should create the file if it does not exist, but if it exists it should just overwrite the keys
-        if settings_path.exists() {
-            let mut existing_settings = String::new();
-            File::open(&settings_path)
-                .and_then(|mut f| f.read_to_string(&mut existing_settings))
-                .map_err(|e| UiError {
-                    name: "read_failed".into(),
-                    message: format!("Failed to read existing clientsettings.json: {e}"),
-                })?;
-            let mut existing_json: Value = from_str(&existing_settings).unwrap_or(json!({}));
-            if let Some(obj) = existing_json.as_object_mut() {
-                if let Some(string_settings) = obj
-                    .get_mut("stringSettings")
-                    .and_then(|v| v.as_object_mut())
-                {
-                    for (k, v) in settings["stringSettings"].as_object().unwrap() {
-                        string_settings.insert(k.clone(), v.clone());
-                    }
-                } else {
-                    obj.insert("stringSettings".into(), settings["stringSettings"].clone());
-                }
-                let mods_path = pb.join("Mods").to_string_lossy().into_owned();
-                if let Some(string_list_settings) = obj
-                    .get_mut("stringListSettings")
-                    .and_then(|v| v.as_object_mut())
-                {
-                    if let Some(mod_paths) = string_list_settings
-                        .get_mut("modPaths")
-                        .and_then(|v| v.as_array_mut())
-                    {
-                        *mod_paths = vec![json!(mods_path), json!("Mods")];
-                    } else {
-                        string_list_settings.insert("modPaths".into(), json!([mods_path, "Mods"]));
-                    }
-                } else {
-                    obj.insert(
-                        "stringListSettings".into(),
-                        json!({ "modPaths": [mods_path, "Mods"] }),
-                    );
-                }
-            }
-            write(&settings_path, to_string_pretty(&existing_json).unwrap()).map_err(|e| {
-                UiError {
-                    name: "write_failed".into(),
-                    message: format!("Failed to write clientsettings.json: {e}"),
-                }
-            })?;
+        let mut clientsettings: Value = if settings_path.exists() {
+            let content =
+                std::fs::read_to_string(&settings_path).unwrap_or_else(|_| "{}".to_string());
+            from_str(&content).unwrap_or(json!({}))
         } else {
-            create_dir_all(settings_path.parent().unwrap()).map_err(|e| UiError {
-                name: "create_dir_failed".into(),
-                message: format!("Failed to create directory for clientsettings.json: {e}"),
-            })?;
-            write(&settings_path, to_string_pretty(&settings).unwrap()).map_err(|e| UiError {
-                name: "write_failed".into(),
-                message: format!("Failed to write clientsettings.json: {e}"),
-            })?;
+            json!({})
+        };
+
+        if let Some(obj) = clientsettings.as_object_mut() {
+            let string_settings = obj.entry("stringSettings").or_insert(json!({}));
+            if let Some(ss) = string_settings.as_object_mut() {
+                ss.insert("playeruid".into(), account["uid"].clone());
+                ss.insert("sessionkey".into(), account["sessionkey"].clone());
+                ss.insert(
+                    "sessionsignature".into(),
+                    account["sessionsignature"].clone(),
+                );
+                ss.insert("playername".into(), account["playername"].clone());
+            }
         }
+
+        let _ = write(&settings_path, to_string_pretty(&clientsettings).unwrap());
     }
+
     // Emit a pre-launch event so the UI can show a loading state
     let _ = app.emit(
         &format!("launch-{}", options.installation_id),
@@ -531,7 +537,9 @@ pub async fn rename_installations_folder(
             message: "Source path has no parent directory".into(),
         })?
         .join(new_name);
-    move_folder(source_path, destination_path)
+    let res = move_folder(source_path, destination_path.clone())?;
+    sync_installation_paths(&destination_path);
+    Ok(res)
 }
 
 #[command]
@@ -540,10 +548,19 @@ pub async fn move_installations_folder(
     destination: String,
     subdir: String,
 ) -> Result<String, UiError> {
-    move_folder(
-        PathBuf::from(source).join(&subdir),
-        PathBuf::from(destination).join(&subdir),
-    )?;
+    let dest_path = PathBuf::from(destination).join(&subdir);
+    move_folder(PathBuf::from(source).join(&subdir), dest_path.clone())?;
+
+    if dest_path.exists() && dest_path.is_dir() {
+        if let Ok(entries) = std::fs::read_dir(&dest_path) {
+            for entry in entries.flatten() {
+                if entry.path().is_dir() {
+                    sync_installation_paths(&entry.path());
+                }
+            }
+        }
+    }
+
     Ok("moved".into())
 }
 
@@ -590,6 +607,8 @@ pub async fn duplicate_installations_folder(
         name: "copy_failed".into(),
         message: format!("Failed to copy directory: {e}"),
     })?;
+
+    sync_installation_paths(&destination_path);
 
     Ok(destination_path.to_string_lossy().into_owned())
 }

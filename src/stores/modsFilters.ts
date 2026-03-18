@@ -1,6 +1,8 @@
 import { create } from "zustand";
 import type { ModTag } from "@/lib/types";
 
+export type TargetVersionMode = "recommended" | "latest";
+
 export type ModsFilters = {
 	selectedGameVersions: string[];
 	addGameVersion: (version: string) => void;
@@ -32,6 +34,8 @@ export type ModsFilters = {
 	setCategory: (category: ModsFilters["category"]) => void;
 	targetUpdateVersion: string;
 	setTargetUpdateVersion: (version: string) => void;
+	targetVersionMode: TargetVersionMode;
+	setTargetVersionMode: (mode: TargetVersionMode) => void;
 };
 
 export const useModsFilters = create<ModsFilters>()((set) => ({
@@ -69,7 +73,9 @@ export const useModsFilters = create<ModsFilters>()((set) => ({
 	setSide: (side) => set({ side }),
 	setSortBy: (key) => set({ sortBy: key }),
 	setTargetUpdateVersion: (version) => set({ targetUpdateVersion: version }),
+	setTargetVersionMode: (mode) => set({ targetVersionMode: mode }),
 	side: "any",
 	sortBy: "trending",
 	targetUpdateVersion: "",
+	targetVersionMode: "recommended",
 }));

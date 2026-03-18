@@ -33,6 +33,7 @@ import type { ModInfo, ProgressPayload } from "@/lib/types";
 import {
 	cn,
 	compareSemverAsc,
+	compareSemverDesc,
 	getTargetRelease,
 	pathDelimiter,
 } from "@/lib/utils";
@@ -80,12 +81,15 @@ export function ModItem({
 		: false;
 
 	const { data: modInfo } = useQuery({
-		enabled: !!updateMod,
+		// Load mod info if it has an update OR if it is installed (to check for downgrades)
+		enabled: !!updateMod || !!installedMod || !installedMod,
 		queryFn: () =>
-			updateMod &&
-			(invoke("fetch_mod_info", {
-				modid: updateMod?.modidstr,
-			}) as Promise<ModInfo>),
+			invoke("fetch_mod_info", {
+				modid:
+					updateMod?.modidstr ||
+					installedMod?.modid.toString() ||
+					mod.modid.toString(),
+			}) as Promise<ModInfo>,
 		queryKey: ["modInfo", mod.modid],
 		refetchOnMount: false,
 		refetchOnReconnect: false,
@@ -93,17 +97,34 @@ export function ModItem({
 	});
 
 	const { openDialog } = useDialogStore();
-	const { setAuthor, targetUpdateVersion } = useModsFilters();
+	const { setAuthor, targetUpdateVersion, targetVersionMode } =
+		useModsFilters();
 
-	const actualTargetVersion =
-		targetUpdateVersion || (installation?.version ?? "");
+	// Retire le suffix "-local" s'il est présent
+	const actualTargetVersion = (
+		targetUpdateVersion ||
+		(installation?.version ?? "")
+	).replace("-local", "");
+
 	const targetRelease = modInfo
-		? getTargetRelease(modInfo.mod.releases, actualTargetVersion)
+		? getTargetRelease(
+				modInfo.mod.releases,
+				actualTargetVersion,
+				targetVersionMode,
+			)
 		: undefined;
-	const hasValidUpdate =
+
+	// On récupère la toute dernière version absolu (pour l'affichage)
+	const absoluteLatest = modInfo
+		? [...modInfo.mod.releases].sort((a, b) =>
+				compareSemverDesc(a.modversion, b.modversion),
+			)[0]
+		: undefined;
+
+	const hasVersionMismatch =
 		targetRelease &&
 		installedMod &&
-		compareSemverAsc(targetRelease.modversion, installedMod.version) > 0;
+		targetRelease.modversion !== installedMod.version;
 
 	const { mutate: downloadLatestModVersion, isPending: isDownloading } =
 		useAddLatestModVersion({
@@ -141,14 +162,14 @@ export function ModItem({
 			}) as Promise<string>,
 		onError: (error) => {
 			toast.error(
-				`Error upgrading/downgrading ${modInfo?.mod.name} to ${installation?.name}: ${error.message}`,
+				`Error synchronizing ${modInfo?.mod.name} to ${installation?.name}: ${error.message}`,
 				{ id: `add-mod-${modInfo?.mod.modid}-${installation?.id}` },
 			);
 			listenRef.current?.();
 		},
 		onMutate: async () => {
 			toast.loading(
-				`Updating ${modInfo?.mod.name} to ${installation?.name}...`,
+				`Synchronizing ${modInfo?.mod.name} to ${installation?.name}...`,
 				{
 					id: `add-mod-${modInfo?.mod.modid}-${installation?.id}`,
 				},
@@ -167,7 +188,7 @@ export function ModItem({
 			if (installation === null) return;
 			listenRef.current?.();
 			toast.success(
-				`Successfully updated ${modInfo?.mod.name} to ${installation.name}`,
+				`Successfully synchronized ${modInfo?.mod.name} to ${installation.name}`,
 				{ id: `add-mod-${modInfo?.mod.modid}-${installation.id}` },
 			);
 			await queryClient.invalidateQueries({
@@ -209,7 +230,7 @@ export function ModItem({
 						}
 					/>
 				</a>
-				<div className="flex flex-col">
+				<div className="flex flex-col justify-center">
 					<div className="flex gap-1 items-center">
 						<a
 							className="hover:underline font-semibold"
@@ -242,10 +263,44 @@ export function ModItem({
 					<p className="text-sm text-muted-foreground line-clamp-1">
 						{mod.summary}
 					</p>
-					<div className="flex gap-2 text-xs text-muted-foreground mt-1">
-						<span>{mod.downloads} downloads</span>
+					<div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted-foreground mt-1 items-center">
+						<span>{mod.downloads} dl</span>
 						<span>{mod.follows} follows</span>
-						<span>{mod.comments} comments</span>
+						<span className="text-muted-foreground/30">|</span>
+
+						{installedMod ? (
+							<>
+								<span className="text-primary font-medium font-mono text-[10px]">
+									Installed: v{installedMod.version}
+								</span>
+								{targetRelease && (
+									<span
+										className={cn(
+											"font-mono text-[10px]",
+											targetRelease.modversion !== installedMod.version
+												? "text-warning-foreground"
+												: "",
+										)}
+									>
+										{targetVersionMode === "latest" ? "Latest" : "Recommended"}:
+										v{targetRelease.modversion}
+									</span>
+								)}
+							</>
+						) : (
+							<>
+								{absoluteLatest && (
+									<span className="text-muted-foreground font-mono text-[10px]">
+										Latest overall: v{absoluteLatest.modversion}
+									</span>
+								)}
+								{targetRelease && (
+									<span className="text-blue-300 font-mono text-[10px]">
+										Target ({actualTargetVersion}): v{targetRelease.modversion}
+									</span>
+								)}
+							</>
+						)}
 					</div>
 				</div>
 			</div>
@@ -275,14 +330,14 @@ export function ModItem({
 				)}
 
 				<Group>
-					{updateMod && installation && installedMod && hasValidUpdate && (
+					{installation && installedMod && hasVersionMismatch && (
 						<Tooltip>
 							<TooltipTrigger
 								render={
 									<GroupItem
 										render={
 											<Button
-												aria-label="Update to Latest Version"
+												aria-label="Sync Version"
 												disabled={isPending || removePending}
 												onClick={() =>
 													removeModFromInstallation({
@@ -309,7 +364,12 @@ export function ModItem({
 									{targetRelease?.modversion ?? "Unknown"}
 								</span>
 								<br />
-								Install compatible version
+								{compareSemverAsc(
+									targetRelease!.modversion,
+									installedMod.version,
+								) > 0
+									? "Update to compatible version"
+									: "Downgrade to compatible version"}
 							</TooltipContent>
 							<GroupSeparator />
 						</Tooltip>

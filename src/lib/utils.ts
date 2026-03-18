@@ -26,9 +26,10 @@ export function makeStringFolderSafe(string: string) {
 
 function parseVer(v: string) {
 	const parts = String(v).trim().split(".");
-	const major = Number(parts[0] ?? 0) || 0;
-	const minor = Number(parts[1] ?? 0) || 0;
-	const patch = Number(parts[2] ?? 0) || 0;
+	// parseInt s'arrête au premier caractère non numérique, ignorant ainsi les -rc, -local, etc.
+	const major = parseInt(parts[0] || "0", 10) || 0;
+	const minor = parseInt(parts[1] || "0", 10) || 0;
+	const patch = parseInt(parts[2] || "0", 10) || 0;
 	return [major, minor, patch];
 }
 
@@ -150,8 +151,16 @@ export const itemVariants = {
 export function getTargetRelease(
 	releases: Release[],
 	targetGameVersion: string,
+	_mode?: "recommended" | "latest",
 ): Release | undefined {
-	return releases.find((release) =>
+	const validReleases = releases.filter((release) =>
 		release.tags.some((tag) => compareSemverAsc(tag, targetGameVersion) <= 0),
 	);
+
+	if (validReleases.length === 0) return undefined;
+
+	// Force le tri décroissant (plus récente d'abord) pour pallier l'ordre aléatoire de l'API
+	return validReleases.sort((a, b) =>
+		compareSemverDesc(a.modversion, b.modversion),
+	)[0];
 }

@@ -24,7 +24,7 @@ import { useInstalledMods } from "@/hooks/use-installed-mods";
 import { useModUpdates } from "@/hooks/use-mod-updates";
 import { useSetDisabledMods } from "@/hooks/use-set-disabled-mods";
 import { gameVersionsQuery, modTagsQuery } from "@/lib/queries";
-import { cn, compareSemverDesc } from "@/lib/utils";
+import { cn, compareSemverAsc, compareSemverDesc } from "@/lib/utils";
 import { useDialogStore } from "@/stores/dialogs";
 import {
 	useInstallations,
@@ -121,7 +121,9 @@ function RouteComponent() {
 		setTargetUpdateVersion,
 	} = useModsFilters();
 
-	const actualTargetVersion = targetUpdateVersion || installation.version;
+	const actualTargetVersion = (
+		targetUpdateVersion || installation.version
+	).replace("-local", "");
 
 	const { data: modUpdates } = useModUpdates(
 		{
@@ -135,6 +137,28 @@ function RouteComponent() {
 			staleTime: Infinity,
 		},
 	);
+
+	// Calcul du nombre de mods à mettre à jour qui sont COMPATIBLES avec la target version.
+	let modsToUpdateCount = 0;
+	if (modUpdates && instMods) {
+		for (const [modid, update] of Object.entries(modUpdates.updates)) {
+			const installed = instMods.mods.find(
+				(m) =>
+					m.modid.toString() === modid ||
+					m.modid.toString() === update.modidstr,
+			);
+			if (!installed) continue;
+
+			// L'update est valide si un de ses tags indique une version de jeu <= à notre cible
+			const isCompatible = update.tags.some(
+				(tag) => compareSemverAsc(tag, actualTargetVersion) <= 0,
+			);
+
+			if (isCompatible && installed.version !== update.modversion) {
+				modsToUpdateCount++;
+			}
+		}
+	}
 
 	const parentRef = useRef<HTMLDivElement>(null);
 
@@ -394,12 +418,27 @@ function RouteComponent() {
 					Import Mods
 				</Button>
 
-				{side === "installed" && modUpdates && instMods && (
-					<UpdateAllButton
-						installation={installation}
-						installedMods={instMods.mods}
-						updates={modUpdates}
-					/>
+				{/* COMPTEUR DE MODS ET UPDATE ALL */}
+				{side === "installed" && instMods && (
+					<div className="flex items-center gap-3 ml-auto border-l border-border pl-3">
+						<div className="flex flex-col text-right justify-center">
+							<span className="text-xs font-medium">
+								{instMods.mods.length} mod(s) installed
+							</span>
+							{modsToUpdateCount > 0 && (
+								<span className="text-[10px] text-warning-foreground font-medium">
+									{modsToUpdateCount} mod(s) to update
+								</span>
+							)}
+						</div>
+						{modUpdates && (
+							<UpdateAllButton
+								installation={installation}
+								installedMods={instMods.mods}
+								updates={modUpdates}
+							/>
+						)}
+					</div>
 				)}
 			</div>
 			<div className="h-full px-4 w-full overflow-hidden">

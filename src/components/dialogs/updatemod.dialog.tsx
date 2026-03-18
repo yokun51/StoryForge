@@ -20,7 +20,7 @@ import {
 import { installedModsQueryKey } from "@/hooks/use-installed-mods";
 import { modUpdatesQueryKey } from "@/hooks/use-mod-updates";
 import type { ProgressPayload } from "@/lib/types";
-import { pathDelimiter } from "@/lib/utils";
+import { compareSemverDesc, pathDelimiter } from "@/lib/utils";
 import type { OutputMod } from "@/routes/install-mods/$id";
 import { useDialogStore } from "@/stores/dialogs";
 import type { Installation } from "@/stores/installations";
@@ -107,7 +107,7 @@ export function UpdateModDialog({
 				invoke("remove_mod_from_installation", { params: { modpath, path } }),
 			onError: (error, variables) => {
 				toast.error(
-					`Error removing ${name} from ${installation.name}: ${error.message}`,
+					`Error removing mod from ${installation.name}: ${error.message}`,
 					{
 						id: `mod-remove-${variables.path}-${variables.modpath}`,
 					},
@@ -201,7 +201,6 @@ export function UpdateModDialog({
 					you want to change to, in{" "}
 					<span className="text-blue-200">{installation.name}</span>.
 				</DialogDescription>
-				{/* We need a select, incase the installation version is not compatible */}
 				<div className="mt-2 w-full overflow-hidden">
 					<Select
 						onValueChange={(value) => {
@@ -230,25 +229,27 @@ export function UpdateModDialog({
 							</span>
 						</SelectTrigger>
 						<SelectContent alignItemWithTrigger={false}>
-							{modInfo?.mod.releases.map((release) => (
-								<SelectItem key={release.fileid} value={release.modversion}>
-									<div className="flex flex-col">
-										<span>
-											{release.modversion}
-											<span className="text-muted-foreground">
-												{" "}
-												for {release.tags[0]}{" "}
-												{release.tags.length > 1
-													? `(+${release.tags.length - 1} more)`
-													: ""}
+							{[...(modInfo?.mod.releases || [])]
+								.sort((a, b) => compareSemverDesc(a.modversion, b.modversion))
+								.map((release) => (
+									<SelectItem key={release.fileid} value={release.modversion}>
+										<div className="flex flex-col">
+											<span>
+												{release.modversion}
+												<span className="text-muted-foreground">
+													{" "}
+													for {release.tags[0]}{" "}
+													{release.tags.length > 1
+														? `(+${release.tags.length - 1} more)`
+														: ""}
+												</span>
 											</span>
-										</span>
-										<span className="text-xs text-muted-foreground">
-											{release.downloads} downloads
-										</span>
-									</div>
-								</SelectItem>
-							))}
+											<span className="text-xs text-muted-foreground">
+												{release.downloads} downloads
+											</span>
+										</div>
+									</SelectItem>
+								))}
 						</SelectContent>
 					</Select>
 				</div>

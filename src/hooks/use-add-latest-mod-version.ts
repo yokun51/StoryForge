@@ -18,7 +18,7 @@ export const useAddLatestModVersion = ({
 	mod: Mod;
 	installation: Installation | null;
 }) => {
-	const { targetUpdateVersion } = useModsFilters();
+	const { targetUpdateVersion, targetVersionMode } = useModsFilters();
 	const emitevent = `mod-download-${mod.modid}-${installation?.id}`;
 	const queryClient = useQueryClient();
 	const listenRef = useRef<UnlistenFn>(null);
@@ -29,11 +29,16 @@ export const useAddLatestModVersion = ({
 				modid: mod.modid.toString(),
 			})) as ModInfo;
 
-			const actualTargetVersion =
-				targetUpdateVersion || (installation?.version ?? "");
+			const actualTargetVersion = (
+				targetUpdateVersion ||
+				(installation?.version ?? "")
+			).replace("-local", "");
 			const targetRelease =
-				getTargetRelease(modInfo.mod.releases, actualTargetVersion) ||
-				modInfo.mod.releases[0];
+				getTargetRelease(
+					modInfo.mod.releases,
+					actualTargetVersion,
+					targetVersionMode,
+				) || modInfo.mod.releases[0];
 
 			(await invoke("download_and_maybe_extract", {
 				destpath: path,
