@@ -193,6 +193,7 @@ export type World = {
 	has_map: boolean;
 	map_markers: MapMarkers | null;
 	prospecting_logs: [string, ProspectingLog][];
+	backup_count: number;
 };
 
 export type Position = {
@@ -233,4 +234,9 @@ export type ProspectReading = {
 export type ProspectingMarker = {
 	position: Position | null;
 	results: ProspectResult[];
+};
+
+export type WorldBackup = {
+	path: string;
+	timestamp: number;
 };

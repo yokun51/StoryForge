@@ -23,6 +23,7 @@ pub struct World {
     pub installation_name: String,
     pub map_markers: Option<Option<MapMarkers>>,
     pub prospecting_logs: Vec<(String, ProspectingLog)>,
+    pub backup_count: usize,
 }
 
 #[command]
@@ -39,6 +40,7 @@ pub fn get_all_saves(app: AppHandle) -> Result<Vec<World>, UiError> {
             let installation_name = entry.file_name().into_string().unwrap_or_default();
             if path.is_dir() {
                 let saves_path = path.join("Saves");
+                let backups_dir = path.join("Backups");
                 if saves_path.exists() && saves_path.is_dir() {
                     for save_entry in read_dir(saves_path)
                         .map_err(|e| UiError::from(format!("Read dir error: {e}")))?
@@ -54,6 +56,28 @@ pub fn get_all_saves(app: AppHandle) -> Result<Vec<World>, UiError> {
                                         .to_os_string()
                                         .into_string()
                                         .unwrap_or_default();
+
+                                    // Compter les backups pour ce monde
+                                    let mut backup_count = 0;
+                                    let file_stem =
+                                        save_path.file_stem().unwrap().to_string_lossy();
+                                    if backups_dir.exists() && backups_dir.is_dir() {
+                                        let prefix = format!("{}_backup_", file_stem);
+                                        if let Ok(entries) = std::fs::read_dir(&backups_dir) {
+                                            for b_entry in entries.flatten() {
+                                                let b_name = b_entry
+                                                    .file_name()
+                                                    .to_string_lossy()
+                                                    .into_owned();
+                                                if b_name.starts_with(&prefix)
+                                                    && b_name.ends_with(".vcdbs")
+                                                {
+                                                    backup_count += 1;
+                                                }
+                                            }
+                                        }
+                                    }
+
                                     let uri =
                                         format!("file:{}?immutable=1", save_path.to_string_lossy());
                                     let conn = rusqlite::Connection::open_with_flags(
@@ -136,6 +160,7 @@ pub fn get_all_saves(app: AppHandle) -> Result<Vec<World>, UiError> {
                                             installation_name: installation_name.clone(),
                                             map_markers,
                                             prospecting_logs: prospecting_results,
+                                            backup_count,
                                         });
                                     }
                                 }
@@ -406,4 +431,74 @@ pub fn backup_world(world_path: String) -> Result<String, UiError> {
         .map_err(|e| UiError::from(format!("Backup copy error: {e}")))?;
 
     Ok(backup_path.to_string_lossy().into_owned())
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct WorldBackup {
+    pub path: String,
+    pub timestamp: u64,
+}
+
+#[command]
+pub fn get_world_backups(world_path: String) -> Result<Vec<WorldBackup>, UiError> {
+    let world_path = Path::new(&world_path);
+    let saves_dir = world_path.parent().unwrap();
+    let backups_dir = saves_dir.parent().unwrap().join("Backups");
+    let file_stem = world_path.file_stem().unwrap().to_string_lossy();
+
+    let mut backups = Vec::new();
+    if backups_dir.exists() && backups_dir.is_dir() {
+        if let Ok(entries) = std::fs::read_dir(backups_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_file() {
+                    let filename = path.file_name().unwrap().to_string_lossy();
+                    let prefix = format!("{}_backup_", file_stem);
+                    if filename.starts_with(&prefix) && filename.ends_with(".vcdbs") {
+                        if let Some(timestamp_str) = filename
+                            .strip_prefix(&prefix)
+                            .and_then(|s| s.strip_suffix(".vcdbs"))
+                        {
+                            if let Ok(timestamp) = timestamp_str.parse::<u64>() {
+                                backups.push(WorldBackup {
+                                    path: path.to_string_lossy().into_owned(),
+                                    timestamp,
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    backups.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+    Ok(backups)
+}
+
+#[command]
+pub fn restore_world_backup(world_path: String, backup_path: String) -> Result<(), UiError> {
+    let world_path = Path::new(&world_path);
+    let backup_path = Path::new(&backup_path);
+
+    if !backup_path.exists() {
+        return Err(UiError::from("Backup file not found."));
+    }
+
+    std::fs::copy(backup_path, world_path)
+        .map_err(|e| UiError::from(format!("Failed to restore backup: {e}")))?;
+
+    Ok(())
+}
+
+#[command]
+pub fn delete_world_backup(backup_path: String) -> Result<(), UiError> {
+    let backup_path = Path::new(&backup_path);
+    if !backup_path.exists() {
+        return Err(UiError::from("Backup file not found."));
+    }
+
+    std::fs::remove_file(backup_path)
+        .map_err(|e| UiError::from(format!("Failed to delete backup: {e}")))?;
+
+    Ok(())
 }

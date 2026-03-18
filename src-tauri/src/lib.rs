@@ -82,6 +82,9 @@ pub fn run() {
             saves::update_world,
             saves::remove_world,
             saves::backup_world,
+            saves::get_world_backups,
+            saves::restore_world_backup,
+            saves::delete_world_backup,
             // Maps
             maps::inspect_map_database,
             maps::get_map_bounds,

@@ -1,7 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 import { formatDistanceToNow } from "date-fns";
 import {
+	ArchiveIcon,
 	DownloadCloudIcon,
+	HistoryIcon,
 	MapIcon,
 	PenIcon,
 	PlayIcon,
@@ -16,6 +18,7 @@ import {
 	TooltipContent,
 	TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { useBackupWorld } from "@/hooks/use-backup-world";
 import { useCopyToClipboard } from "@/hooks/use-copy-to-clipboard";
 import { useDownloadVersion } from "@/hooks/use-download-version";
 import { useInstalledVersions } from "@/hooks/use-installed-versions";
@@ -35,14 +38,28 @@ export const WorldItem = ({ world }: { world: World }) => {
 			installation.path.split(/[/\\]/).pop() === world.installation_name,
 	);
 	const version = versions?.find((v) => v === installation?.version);
+
 	const { mutate: installVersion, isPending: isInstalling } =
 		useDownloadVersion();
+	const { mutate: backupWorld, isPending: isBackingUp } = useBackupWorld();
+
 	if (!installation) return null;
 	if (!worldData) return null;
+
+	const safeInstVer = installation.version.replace("-local", "");
+	const safeLastSavedVer = worldData.last_saved_game_version?.replace(
+		"-local",
+		"",
+	);
+	const safeCreatedVer = worldData.created_game_version.replace("-local", "");
+
+	const isDifferentVersion =
+		safeLastSavedVer && safeLastSavedVer !== safeInstVer;
+
 	return (
-		<div className="grid grid-cols-3 justify-between w-full items-center">
-			<div className="flex flex-col">
-				<p className="text-sm">
+		<div className="grid grid-cols-[1fr_auto_min-content] gap-4 w-full items-center">
+			<div className="flex flex-col min-w-0">
+				<p className="text-sm truncate">
 					{worldData.world_name}
 					<Tooltip>
 						<TooltipTrigger
@@ -66,7 +83,7 @@ export const WorldItem = ({ world }: { world: World }) => {
 						</TooltipContent>
 					</Tooltip>
 				</p>
-				<p className="text-xs text-muted-foreground">
+				<p className="text-xs text-muted-foreground truncate">
 					by{" "}
 					<span className="text-warning-foreground">
 						{worldData.created_by_player_name}
@@ -77,11 +94,10 @@ export const WorldItem = ({ world }: { world: World }) => {
 					</span>
 				</p>
 			</div>
-			<div className="flex flex-col">
+			<div className="flex flex-col text-right whitespace-nowrap">
 				<p className="text-sm text-muted-foreground">
 					{installation.name}{" "}
-					{worldData.last_saved_game_version &&
-					worldData.last_saved_game_version !== installation.version ? (
+					{isDifferentVersion ? (
 						<Tooltip>
 							<TooltipTrigger>
 								<span className="text-xs text-warning-foreground opacity-50">
@@ -99,8 +115,8 @@ export const WorldItem = ({ world }: { world: World }) => {
 					) : (
 						<span className="text-xs opacity-50">
 							({worldData.created_game_version}
-							{worldData.last_saved_game_version !==
-							worldData.created_game_version
+							{safeLastSavedVer !== safeCreatedVer &&
+							worldData.last_saved_game_version
 								? ` → ${worldData.last_saved_game_version}`
 								: ""}
 							)
@@ -116,7 +132,7 @@ export const WorldItem = ({ world }: { world: World }) => {
 						: "Never"}
 				</p>
 			</div>
-			<Group className="justify-end w-full">
+			<Group className="justify-end w-full shrink-0">
 				<Tooltip>
 					<TooltipTrigger
 						render={
@@ -166,6 +182,60 @@ export const WorldItem = ({ world }: { world: World }) => {
 						{version ? "Play" : `Install ${installation.version}`}
 					</TooltipContent>
 				</Tooltip>
+				<GroupSeparator />
+				<Tooltip>
+					<TooltipTrigger
+						render={
+							<GroupItem
+								render={
+									<Button
+										disabled={isBackingUp}
+										onClick={() => backupWorld(world)}
+										variant="outline"
+									/>
+								}
+							>
+								<ArchiveIcon
+									aria-hidden="true"
+									className="-ms-1 opacity-60 text-blue-300"
+									size={16}
+								/>
+							</GroupItem>
+						}
+					/>
+					<TooltipContent>Create Backup</TooltipContent>
+				</Tooltip>
+				<Tooltip>
+					<TooltipTrigger
+						render={
+							<GroupItem
+								render={
+									<Button
+										className="relative"
+										onClick={() => openDialog("RestoreWorldDialog", { world })}
+										variant="outline"
+									/>
+								}
+							>
+								<HistoryIcon
+									aria-hidden="true"
+									className={cn(
+										"-ms-1 opacity-60",
+										world.backup_count > 0 && "text-success opacity-100",
+									)}
+									size={16}
+								/>
+								{world.backup_count > 0 && (
+									<span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-success text-[9px] font-bold text-success-foreground border border-background">
+										{world.backup_count}
+									</span>
+								)}
+							</GroupItem>
+						}
+					/>
+					<TooltipContent>View & Restore Backups</TooltipContent>
+				</Tooltip>
+				<GroupSeparator />
 				<Tooltip>
 					<TooltipTrigger
 						render={
@@ -182,7 +252,7 @@ export const WorldItem = ({ world }: { world: World }) => {
 									aria-hidden="true"
 									className={cn(
 										"-ms-1 opacity-60",
-										!world.has_map ? "text-destructive" : "text-blue-300",
+										!world.has_map ? "text-destructive" : "",
 									)}
 									size={16}
 								/>

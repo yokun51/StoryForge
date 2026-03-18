@@ -24,6 +24,7 @@ import { EditWorldDialog } from "@/components/dialogs/editworld.dialog";
 import { ImportInstallationDialog } from "@/components/dialogs/importinstallation.dialog";
 import { ImportModsDialog } from "@/components/dialogs/importmods.dialog";
 import { RemoveModDialog } from "@/components/dialogs/removemod.dialog";
+import { RestoreWorldDialog } from "@/components/dialogs/restoreworld.dialog";
 import { SaveModProfileDialog } from "@/components/dialogs/savemodprofile.dialog";
 import { UpdateModDialog } from "@/components/dialogs/updatemod.dialog";
 import { ViewMapDialog } from "@/components/dialogs/viewmap.dialog";
@@ -206,6 +207,14 @@ function RootComponent() {
 					{...((active?.key === "SaveModProfileDialog"
 						? active.props
 						: {}) as DialogMap["SaveModProfileDialog"])}
+				/>
+			)}
+			{active?.key === "RestoreWorldDialog" && (
+				<RestoreWorldDialog
+					open={active?.key === "RestoreWorldDialog"}
+					{...((active?.key === "RestoreWorldDialog"
+						? active.props
+						: {}) as DialogMap["RestoreWorldDialog"])}
 				/>
 			)}
 			<Toaster richColors theme={darkMode ? "dark" : "light"} />
