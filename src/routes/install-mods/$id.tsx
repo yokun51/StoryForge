@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { FolderDownIcon, SaveIcon, TrashIcon } from "lucide-react";
-import { useRef, useState } from "react";
+import { useRef } from "react";
 import { toast } from "sonner";
 import { AuthorAutocomplete } from "@/components/auto-completes/author.auto-complete";
 import { UpdateAllButton } from "@/components/buttons/update-all.button";
@@ -98,9 +98,11 @@ function RouteComponent() {
 	const { data: lockedModsData } = useLockedMods(installation.path);
 	const { mutate: setDisabledMods } = useSetDisabledMods(installation.path);
 
-	const [selectedProfileId, setSelectedProfileId] = useState<string | null>(
-		null,
-	);
+	// Utilisation des propriétés sauvegardées dans l'installation
+	const selectedProfileId = installation.selectedModProfileId ?? null;
+	const actualTargetVersion = (
+		installation.targetVersion || installation.version
+	).replace("-local", "");
 
 	const {
 		selectedGameVersions,
@@ -120,14 +122,9 @@ function RouteComponent() {
 		category,
 		setCategory,
 		side,
-		targetUpdateVersion,
-		setTargetUpdateVersion,
 	} = useModsFilters();
 
 	const lockedMods = lockedModsData || [];
-	const actualTargetVersion = (
-		targetUpdateVersion || installation.version
-	).replace("-local", "");
 
 	const { data: modUpdates } = useModUpdates(
 		{
@@ -152,7 +149,6 @@ function RouteComponent() {
 			);
 			if (!installed) continue;
 
-			// Ignore les mods verrouillés
 			if (lockedMods.includes(installed.modid.toString())) continue;
 
 			const isCompatible = update.tags.some(
@@ -258,7 +254,7 @@ function RouteComponent() {
 						onValueChange={(value) => setSortBy(value as ModsFilters["sortBy"])}
 						value={sortBy}
 					>
-						<SelectTrigger>
+						<SelectTrigger className="h-9">
 							{sortBy
 								? `${sortOptions[sortBy as keyof typeof sortOptions]}`
 								: "Sort by"}
@@ -288,7 +284,7 @@ function RouteComponent() {
 						}
 						value={category}
 					>
-						<SelectTrigger>
+						<SelectTrigger className="h-9">
 							{category
 								? `${categoryOptions[category as keyof typeof categoryOptions]}`
 								: "Category"}
@@ -321,11 +317,18 @@ function RouteComponent() {
 						Target Version
 					</Label>
 					<Select
-						onValueChange={(value) => setTargetUpdateVersion(value ?? "")}
+						onValueChange={(value) =>
+							updateInstallation({
+								...installation,
+								targetVersion: value ?? "",
+							})
+						}
 						value={actualTargetVersion}
 					>
-						<SelectTrigger className="w-32 h-9">
-							{actualTargetVersion}
+						<SelectTrigger className="w-32 h-9 overflow-hidden">
+							<span className="truncate block text-left w-full pr-2">
+								{actualTargetVersion}
+							</span>
 						</SelectTrigger>
 						<SelectContent align="start" alignItemWithTrigger={false}>
 							{gameVersions?.sort(compareSemverDesc).map((version) => (
@@ -340,16 +343,21 @@ function RouteComponent() {
 				<div className="flex items-center gap-2 border-l border-border pl-2 ml-1">
 					<Select
 						onValueChange={(val) =>
-							setSelectedProfileId(val === "none" ? null : val)
+							updateInstallation({
+								...installation,
+								selectedModProfileId: val === "none" ? null : val,
+							})
 						}
 						value={selectedProfileId ?? "none"}
 					>
-						<SelectTrigger className="w-40 h-9">
-							{selectedProfileId && selectedProfileId !== "none"
-								? installation.modProfiles?.find(
-										(p) => p.id === selectedProfileId,
-									)?.name
-								: "Mod Profiles"}
+						<SelectTrigger className="w-48 max-w-48 h-9 overflow-hidden">
+							<span className="truncate block text-left w-full pr-2">
+								{selectedProfileId && selectedProfileId !== "none"
+									? installation.modProfiles?.find(
+											(p) => p.id === selectedProfileId,
+										)?.name
+									: "Mod Profiles"}
+							</span>
 						</SelectTrigger>
 						<SelectContent>
 							{!installation.modProfiles ||
@@ -392,8 +400,8 @@ function RouteComponent() {
 										modProfiles: installation.modProfiles?.filter(
 											(p) => p.id !== selectedProfileId,
 										),
+										selectedModProfileId: null,
 									});
-									setSelectedProfileId(null);
 									toast.success("Profile deleted");
 								}}
 								size="icon"

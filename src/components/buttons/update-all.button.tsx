@@ -30,10 +30,15 @@ export const UpdateAllButton = ({
 	const emitevent = `mod-updates-${installation?.id}-progress`;
 	const queryClient = useQueryClient();
 	const [wantsToUpdate, setWantsToUpdate] = useState(false);
-	const { targetUpdateVersion, targetVersionMode } = useModsFilters();
+
+	// Suppression de targetUpdateVersion ici
+	const { targetVersionMode } = useModsFilters();
+
+	// Utilisation de la version sauvegardée dans l'installation
 	const actualTargetVersion = (
-		targetUpdateVersion ||
-		(installation?.version ?? "")
+		installation?.targetVersion ||
+		installation?.version ||
+		""
 	).replace("-local", "");
 
 	const { mutateAsync: removeModFromInstallation, isPending: removePending } =
@@ -85,9 +90,7 @@ export const UpdateAllButton = ({
 			});
 			let updatedCount = 0;
 
-			// On itère sur les mises à jour retournées par l'API car elles contiennent le vrai ID string
 			for (const [apiModId, updateMod] of Object.entries(updates.updates)) {
-				// Trouve la correspondance du mod
 				const isInstalled = installedMods.find(
 					(instMod) =>
 						instMod.modid.toString() === apiModId ||
@@ -96,13 +99,11 @@ export const UpdateAllButton = ({
 				);
 
 				if (!isInstalled) continue;
-
-				// Ignore les mods verrouillés
 				if (lockedMods.includes(isInstalled.modid.toString())) continue;
 
 				try {
 					const modInfo = (await invoke("fetch_mod_info", {
-						modid: apiModId, // Important : Utiliser le vrai ID
+						modid: apiModId,
 					})) as ModInfo;
 
 					const targetRelease = getTargetRelease(

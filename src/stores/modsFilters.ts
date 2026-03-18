@@ -43,8 +43,6 @@ export type ModsFilters = {
 	setSide: (side: ModsFilters["side"]) => void;
 	category: "mod" | "externaltool" | "other";
 	setCategory: (category: ModsFilters["category"]) => void;
-	targetUpdateVersion: string;
-	setTargetUpdateVersion: (version: string) => void;
 	targetVersionMode: TargetVersionMode;
 	setTargetVersionMode: (mode: TargetVersionMode) => void;
 };
@@ -84,7 +82,6 @@ export const useModsFilters = create<ModsFilters>()((set) => ({
 	setSearchText: (text) => set({ searchText: text }),
 	setSide: (side) =>
 		set((state) => {
-			// Restaure le tri mémorisé selon la tab ou utilise les valeurs par défaut
 			if (side === "installed") {
 				return { side, sortBy: state.lastSortInstalled || "name" };
 			} else {
@@ -93,7 +90,6 @@ export const useModsFilters = create<ModsFilters>()((set) => ({
 		}),
 	setSortBy: (key) =>
 		set((state) => {
-			// Sauvegarde le tri indépendamment dans la mémoire locale
 			if (state.side === "installed") {
 				return { lastSortInstalled: key, sortBy: key };
 			} else {
@@ -103,15 +99,12 @@ export const useModsFilters = create<ModsFilters>()((set) => ({
 				};
 			}
 		}),
-	setTargetUpdateVersion: (version) => set({ targetUpdateVersion: version }),
 	setTargetVersionMode: (mode) => set({ targetVersionMode: mode }),
 	side: "any",
 	sortBy: "trending",
-	targetUpdateVersion: "",
 	targetVersionMode: "recommended",
 }));
 
-// Activation de la sauvegarde automatique sur le disque
 export const tauriModsFiltersHandler = createTauriStore(
 	"modsFilters",
 	useModsFilters,

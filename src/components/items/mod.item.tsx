@@ -60,7 +60,6 @@ export function ModItem({
 	const listenRef = useRef<UnlistenFn>(null);
 	const emitevent = `mod-download-${mod.modid}-${installation?.id}`;
 
-	// Détecte si le mod est généré localement pour le mode hors-ligne
 	const isLocalOnly = mod.summary === "Local/Offline mod";
 
 	const installedMod = installedMods.find(
@@ -97,7 +96,7 @@ export function ModItem({
 		: false;
 
 	const { data: modInfo } = useQuery({
-		enabled: !isLocalOnly, // Ne pas lancer la requête si c'est un mod purement local/hors-ligne
+		enabled: !isLocalOnly,
 		queryFn: () =>
 			invoke("fetch_mod_info", {
 				modid: mod.modid.toString(),
@@ -106,16 +105,19 @@ export function ModItem({
 		refetchOnMount: false,
 		refetchOnReconnect: false,
 		refetchOnWindowFocus: false,
-		retry: false, // Évite que react-query boucle indéfiniment si on n'a pas internet
+		retry: false,
 	});
 
 	const { openDialog } = useDialogStore();
-	const { setAuthor, targetUpdateVersion, targetVersionMode } =
-		useModsFilters();
 
+	// Suppression de targetUpdateVersion ici
+	const { setAuthor, targetVersionMode } = useModsFilters();
+
+	// Utilisation de la version sauvegardée dans l'installation
 	const actualTargetVersion = (
-		targetUpdateVersion ||
-		(installation?.version ?? "")
+		installation?.targetVersion ||
+		installation?.version ||
+		""
 	).replace("-local", "");
 
 	const targetRelease = modInfo
@@ -229,7 +231,7 @@ export function ModItem({
 				<a
 					href={`https://mods.vintagestory.at/${mod.urlalias ?? `show/mod/${mod.assetid}`}`}
 					onClick={(e) => {
-						if (isLocalOnly) e.preventDefault(); // Désactive le lien si hors-ligne
+						if (isLocalOnly) e.preventDefault();
 					}}
 					rel="noreferrer"
 					target="_blank"
@@ -239,7 +241,6 @@ export function ModItem({
 						className="w-12 h-12 rounded hover:scale-105 transition-transform"
 						loading="lazy"
 						onError={(e) => {
-							// Image de secours si pas d'internet
 							e.currentTarget.src = "/StoryForge.png";
 						}}
 						src={
@@ -340,7 +341,6 @@ export function ModItem({
 							onCheckedChange={(checked) => {
 								toggleMod({
 									enable: checked,
-									// Assure-toi qu'on utilise bien le vrai ID stocké en local
 									modid: installedMod.modid.toString(),
 									version: installedMod.version,
 								});
@@ -471,7 +471,6 @@ export function ModItem({
 						</Tooltip>
 					)}
 
-					{/* Masque le bouton Update si on est hors-ligne car on ne pourrait pas lister les versions */}
 					{installation &&
 						installedMod &&
 						modInfo &&
@@ -539,7 +538,6 @@ export function ModItem({
 								<TooltipContent>Remove</TooltipContent>
 							</Tooltip>
 						) : (
-							// Masque le bouton Add Mod si hors-ligne car impossible à télécharger
 							modInfo && (
 								<Tooltip>
 									<TooltipTrigger

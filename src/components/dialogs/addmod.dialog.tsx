@@ -51,10 +51,15 @@ export function AddModDialog({
 	const listenRef = useRef<UnlistenFn>(null);
 	const [selectedVersion, setSelectedVersion] = useState<Release | null>(null);
 	const queryClient = useQueryClient();
-	const { targetUpdateVersion } = useModsFilters();
 
-	const actualTargetVersion =
-		targetUpdateVersion || (installation?.version ?? "");
+	const { targetVersionMode } = useModsFilters();
+
+	// Utilisation de la version sauvegardée dans l'installation
+	const actualTargetVersion = (
+		installation?.targetVersion ||
+		installation?.version ||
+		""
+	).replace("-local", "");
 
 	const { mutate: addModToInstallation, isPending } = useAddModToInstallation({
 		onError: (error, variables) => {
@@ -109,11 +114,14 @@ export function AddModDialog({
 	useEffect(() => {
 		if (modInfo && modInfo.mod.releases.length > 0) {
 			const targetRelease =
-				getTargetRelease(modInfo.mod.releases, actualTargetVersion) ||
-				modInfo.mod.releases[0];
+				getTargetRelease(
+					modInfo.mod.releases,
+					actualTargetVersion,
+					targetVersionMode,
+				) || modInfo.mod.releases[0];
 			setSelectedVersion(targetRelease);
 		}
-	}, [modInfo, actualTargetVersion]);
+	}, [modInfo, actualTargetVersion, targetVersionMode]);
 
 	return (
 		<Dialog

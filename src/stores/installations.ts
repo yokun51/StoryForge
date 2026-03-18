@@ -21,6 +21,8 @@ export type Installation = {
 	icon: string | null;
 	favorite: boolean;
 	modProfiles?: ModProfile[];
+	selectedModProfileId?: string | null;
+	targetVersion?: string | null;
 };
 
 type InstallationsStore = {
