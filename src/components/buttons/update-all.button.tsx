@@ -18,11 +18,14 @@ import { useModsFilters } from "@/stores/modsFilters";
 
 export const UpdateAllButton = ({
 	installation,
+	updates,
 	installedMods,
+	lockedMods,
 }: {
 	installation: Installation;
 	updates: ModUpdatesResponse | undefined;
 	installedMods: OutputMod[];
+	lockedMods: string[];
 }) => {
 	const emitevent = `mod-updates-${installation?.id}-progress`;
 	const queryClient = useQueryClient();
@@ -75,17 +78,31 @@ export const UpdateAllButton = ({
 		});
 
 	const handleUpdateAll = async () => {
+		if (!updates) return;
 		if (wantsToUpdate) {
 			toast.loading("Checking for compatible versions...", {
 				id: `mod-updates-${installation.id}`,
 			});
 			let updatedCount = 0;
 
-			// On itère sur TOUS les mods installés pour appliquer la syncro (downgrade & upgrade)
-			for (const isInstalled of installedMods) {
+			// On itère sur les mises à jour retournées par l'API car elles contiennent le vrai ID string
+			for (const [apiModId, updateMod] of Object.entries(updates.updates)) {
+				// Trouve la correspondance du mod
+				const isInstalled = installedMods.find(
+					(instMod) =>
+						instMod.modid.toString() === apiModId ||
+						instMod.modid.toString() === updateMod.modidstr ||
+						instMod.name.toLowerCase() === updateMod.filename.toLowerCase(),
+				);
+
+				if (!isInstalled) continue;
+
+				// Ignore les mods verrouillés
+				if (lockedMods.includes(isInstalled.modid.toString())) continue;
+
 				try {
 					const modInfo = (await invoke("fetch_mod_info", {
-						modid: isInstalled.modid.toString(),
+						modid: apiModId, // Important : Utiliser le vrai ID
 					})) as ModInfo;
 
 					const targetRelease = getTargetRelease(
@@ -106,16 +123,9 @@ export const UpdateAllButton = ({
 							modpath: isInstalled.path,
 							path: installation.path,
 							updateMod: {
-								created: targetRelease.created,
-								downloads: targetRelease.downloads,
-								fileid: targetRelease.fileid,
-								filename: targetRelease.filename,
+								...updateMod,
 								mainfile: targetRelease.mainfile,
-								modid: isInstalled.modid.toString(),
-								modidstr: targetRelease.modidstr,
 								modversion: targetRelease.modversion,
-								releaseid: targetRelease.releaseid,
-								tags: targetRelease.tags,
 							} as any,
 						});
 					}

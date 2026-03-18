@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useCallback } from "react";
 import { useDisabledMods } from "@/hooks/use-disabled-mods";
 import { useInstalledMods } from "@/hooks/use-installed-mods";
+import { useLockedMods } from "@/hooks/use-locked-mods";
 import { useModUpdates } from "@/hooks/use-mod-updates";
 import type { Installation } from "@/stores/installations";
 import { useModsFilters } from "@/stores/modsFilters";
@@ -67,6 +68,8 @@ export function ModList({
 	const installedMods = instMods?.mods ?? [];
 	const { data: disabledModsData } = useDisabledMods(installation.path);
 	const disabledModsList = disabledModsData || [];
+	const { data: lockedModsData } = useLockedMods(installation.path);
+	const lockedModsList = lockedModsData || [];
 
 	const { data: modUpdates } = useModUpdates(
 		{
@@ -102,20 +105,69 @@ export function ModList({
 				: installedMods.some(
 						(installedMod) =>
 							installedMod.modid.toString() === mod.modid.toString() ||
-							mod.modidstrs.includes(installedMod.modid.toString()),
+							mod.modidstrs.includes(installedMod.modid.toString()) ||
+							(mod.urlalias &&
+								installedMod.modid.toString().toLowerCase() ===
+									mod.urlalias.toLowerCase()) ||
+							installedMod.name.toLowerCase() === mod.name.toLowerCase(),
 					),
 		)
 		.sort((a, b) => {
-			if (sortBy === "status") {
+			if (sortBy === "locked") {
+				// Trouve l'id exact avec lequel le mod a été installé et potentiellement verrouillé
 				const aInst = installedMods.find(
 					(instMod) =>
 						instMod.modid.toString() === a.modid.toString() ||
-						a.modidstrs.includes(instMod.modid.toString()),
+						a.modidstrs.includes(instMod.modid.toString()) ||
+						(a.urlalias &&
+							instMod.modid.toString().toLowerCase() ===
+								a.urlalias.toLowerCase()) ||
+						instMod.name.toLowerCase() === a.name.toLowerCase(),
 				);
 				const bInst = installedMods.find(
 					(instMod) =>
 						instMod.modid.toString() === b.modid.toString() ||
-						b.modidstrs.includes(instMod.modid.toString()),
+						b.modidstrs.includes(instMod.modid.toString()) ||
+						(b.urlalias &&
+							instMod.modid.toString().toLowerCase() ===
+								b.urlalias.toLowerCase()) ||
+						instMod.name.toLowerCase() === b.name.toLowerCase(),
+				);
+
+				const aLocked =
+					aInst && lockedModsList.includes(aInst.modid.toString()) ? 1 : 0;
+				const bLocked =
+					bInst && lockedModsList.includes(bInst.modid.toString()) ? 1 : 0;
+
+				if (aLocked !== bLocked) {
+					return orderDirection === "descending"
+						? bLocked - aLocked
+						: aLocked - bLocked;
+				}
+				if (orderDirection === "descending") {
+					return b.name.localeCompare(a.name);
+				}
+				return a.name.localeCompare(b.name);
+			}
+
+			if (sortBy === "status") {
+				const aInst = installedMods.find(
+					(instMod) =>
+						instMod.modid.toString() === a.modid.toString() ||
+						a.modidstrs.includes(instMod.modid.toString()) ||
+						(a.urlalias &&
+							instMod.modid.toString().toLowerCase() ===
+								a.urlalias.toLowerCase()) ||
+						instMod.name.toLowerCase() === a.name.toLowerCase(),
+				);
+				const bInst = installedMods.find(
+					(instMod) =>
+						instMod.modid.toString() === b.modid.toString() ||
+						b.modidstrs.includes(instMod.modid.toString()) ||
+						(b.urlalias &&
+							instMod.modid.toString().toLowerCase() ===
+								b.urlalias.toLowerCase()) ||
+						instMod.name.toLowerCase() === b.name.toLowerCase(),
 				);
 
 				const aDisabled =
@@ -136,11 +188,8 @@ export function ModList({
 				const bVal = bDisabled ? 1 : 0;
 
 				if (aVal !== bVal) {
-					// Ascending (Défaut) : Activés (0) en premier
-					// Descending : Désactivés (1) en premier
 					return orderDirection === "descending" ? bVal - aVal : aVal - bVal;
 				}
-				// Si statut égal, on trie par nom en second choix pour que ce soit propre
 				if (orderDirection === "descending") {
 					return b.name.localeCompare(a.name);
 				}

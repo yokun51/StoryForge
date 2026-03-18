@@ -3,11 +3,12 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import {
 	DownloadCloudIcon,
+	LockIcon,
 	PackageMinusIcon,
 	PackagePlusIcon,
 	PackageSearchIcon,
+	UnlockIcon,
 } from "lucide-react";
-import { motion } from "motion/react";
 import { useRef } from "react";
 import { toast } from "sonner";
 import type { Mod } from "@/components/lists/mod.list";
@@ -24,11 +25,13 @@ import {
 import { useAddLatestModVersion } from "@/hooks/use-add-latest-mod-version";
 import { useDisabledMods } from "@/hooks/use-disabled-mods";
 import { installedModsQueryKey } from "@/hooks/use-installed-mods";
+import { useLockedMods } from "@/hooks/use-locked-mods";
 import {
 	type ModUpdatesResponse,
 	modUpdatesQueryKey,
 } from "@/hooks/use-mod-updates";
 import { useToggleMod } from "@/hooks/use-toggle-mod";
+import { useToggleModLock } from "@/hooks/use-toggle-mod-lock";
 import type { ModInfo, ProgressPayload } from "@/lib/types";
 import {
 	cn,
@@ -56,11 +59,16 @@ export function ModItem({
 	const queryClient = useQueryClient();
 	const listenRef = useRef<UnlistenFn>(null);
 	const emitevent = `mod-download-${mod.modid}-${installation?.id}`;
+
 	const installedMod = installedMods.find(
 		(i) =>
 			i.modid.toString() === mod.modid.toString() ||
-			mod.modidstrs.includes(i.modid.toString()),
+			mod.modidstrs.includes(i.modid.toString()) ||
+			(mod.urlalias &&
+				i.modid.toString().toLowerCase() === mod.urlalias.toLowerCase()) ||
+			i.name.toLowerCase() === mod.name.toLowerCase(),
 	);
+
 	const updateMod =
 		modUpdates?.updates[mod.modidstrs[0]] ??
 		modUpdates?.updates[mod.modid.toString()] ??
@@ -72,6 +80,11 @@ export function ModItem({
 		installation?.path ?? "",
 	);
 
+	const { data: lockedMods } = useLockedMods(installation?.path ?? "");
+	const isLocked =
+		lockedMods?.includes(installedMod?.modid.toString() ?? "") ?? false;
+	const { mutate: toggleLock } = useToggleModLock(installation?.path ?? "");
+
 	const isCurrentlyDisabled = installedMod
 		? disabledMods?.some(
 				(d) =>
@@ -81,14 +94,10 @@ export function ModItem({
 		: false;
 
 	const { data: modInfo } = useQuery({
-		// Load mod info if it has an update OR if it is installed (to check for downgrades)
 		enabled: !!updateMod || !!installedMod || !installedMod,
 		queryFn: () =>
 			invoke("fetch_mod_info", {
-				modid:
-					updateMod?.modidstr ||
-					installedMod?.modid.toString() ||
-					mod.modid.toString(),
+				modid: mod.modid.toString(),
 			}) as Promise<ModInfo>,
 		queryKey: ["modInfo", mod.modid],
 		refetchOnMount: false,
@@ -100,7 +109,6 @@ export function ModItem({
 	const { setAuthor, targetUpdateVersion, targetVersionMode } =
 		useModsFilters();
 
-	// Retire le suffix "-local" s'il est présent
 	const actualTargetVersion = (
 		targetUpdateVersion ||
 		(installation?.version ?? "")
@@ -114,7 +122,6 @@ export function ModItem({
 			)
 		: undefined;
 
-	// On récupère la toute dernière version absolu (pour l'affichage)
 	const absoluteLatest = modInfo
 		? [...modInfo.mod.releases].sort((a, b) =>
 				compareSemverDesc(a.modversion, b.modversion),
@@ -124,7 +131,8 @@ export function ModItem({
 	const hasVersionMismatch =
 		targetRelease &&
 		installedMod &&
-		targetRelease.modversion !== installedMod.version;
+		targetRelease.modversion !== installedMod.version &&
+		!isLocked;
 
 	const { mutate: downloadLatestModVersion, isPending: isDownloading } =
 		useAddLatestModVersion({
@@ -201,8 +209,7 @@ export function ModItem({
 	});
 
 	return (
-		<motion.div
-			animate={{ opacity: 1, y: 0 }}
+		<div
 			className={cn([
 				"flex flex-row p-2 justify-between w-full items-center",
 				installedMod &&
@@ -211,9 +218,8 @@ export function ModItem({
 				installedMod &&
 					isCurrentlyDisabled &&
 					"bg-gradient-to-r from-muted/50 to-transparent opacity-80 grayscale",
+				isLocked && "border-l-4 border-l-primary",
 			])}
-			exit={{ opacity: 0, y: 12 }}
-			initial={{ opacity: 0, y: 12 }}
 		>
 			<div className="flex flex-row gap-2">
 				<a
@@ -277,7 +283,8 @@ export function ModItem({
 									<span
 										className={cn(
 											"font-mono text-[10px]",
-											targetRelease.modversion !== installedMod.version
+											targetRelease.modversion !== installedMod.version &&
+												!isLocked
 												? "text-warning-foreground"
 												: "",
 										)}
@@ -412,6 +419,45 @@ export function ModItem({
 									<GroupItem
 										render={
 											<Button
+												className={
+													isLocked ? "text-primary-foreground opacity-100" : ""
+												}
+												onClick={() =>
+													toggleLock({
+														lock: !isLocked,
+														modid: installedMod.modid.toString(),
+													})
+												}
+												size="icon"
+												variant={isLocked ? "default" : "outline"}
+											/>
+										}
+									>
+										{isLocked ? (
+											<LockIcon aria-hidden="true" size={16} />
+										) : (
+											<UnlockIcon
+												aria-hidden="true"
+												className="opacity-60"
+												size={16}
+											/>
+										)}
+									</GroupItem>
+								}
+							/>
+							<TooltipContent>
+								{isLocked ? "Unlock Version" : "Lock Version (Ignore Updates)"}
+							</TooltipContent>
+							<GroupSeparator />
+						</Tooltip>
+					)}
+					{installation && installedMod && (
+						<Tooltip>
+							<TooltipTrigger
+								render={
+									<GroupItem
+										render={
+											<Button
 												aria-label="Update"
 												onClick={() =>
 													openDialog("UpdateModDialog", {
@@ -500,6 +546,6 @@ export function ModItem({
 						))}
 				</Group>
 			</div>
-		</motion.div>
+		</div>
 	);
 }

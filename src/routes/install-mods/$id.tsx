@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select";
 import { useDisabledMods } from "@/hooks/use-disabled-mods";
 import { useInstalledMods } from "@/hooks/use-installed-mods";
+import { useLockedMods } from "@/hooks/use-locked-mods";
 import { useModUpdates } from "@/hooks/use-mod-updates";
 import { useSetDisabledMods } from "@/hooks/use-set-disabled-mods";
 import { gameVersionsQuery, modTagsQuery } from "@/lib/queries";
@@ -57,6 +58,7 @@ const sortOptions: Record<ModsFilters["sortBy"], string> = {
 	created: "Created",
 	downloads: "Downloads",
 	follows: "Follows",
+	locked: "Locked Version (Updates Ignored)",
 	name: "Name",
 	status: "Status (Active/Inactive)",
 	trending: "Trending",
@@ -93,6 +95,7 @@ function RouteComponent() {
 		staleTime: Infinity,
 	});
 	const { data: disabledMods } = useDisabledMods(installation.path);
+	const { data: lockedModsData } = useLockedMods(installation.path);
 	const { mutate: setDisabledMods } = useSetDisabledMods(installation.path);
 
 	const [selectedProfileId, setSelectedProfileId] = useState<string | null>(
@@ -121,6 +124,7 @@ function RouteComponent() {
 		setTargetUpdateVersion,
 	} = useModsFilters();
 
+	const lockedMods = lockedModsData || [];
 	const actualTargetVersion = (
 		targetUpdateVersion || installation.version
 	).replace("-local", "");
@@ -138,7 +142,6 @@ function RouteComponent() {
 		},
 	);
 
-	// Calcul du nombre de mods à mettre à jour qui sont COMPATIBLES avec la target version.
 	let modsToUpdateCount = 0;
 	if (modUpdates && instMods) {
 		for (const [modid, update] of Object.entries(modUpdates.updates)) {
@@ -149,7 +152,9 @@ function RouteComponent() {
 			);
 			if (!installed) continue;
 
-			// L'update est valide si un de ses tags indique une version de jeu <= à notre cible
+			// Ignore les mods verrouillés
+			if (lockedMods.includes(installed.modid.toString())) continue;
+
 			const isCompatible = update.tags.some(
 				(tag) => compareSemverAsc(tag, actualTargetVersion) <= 0,
 			);
@@ -305,7 +310,6 @@ function RouteComponent() {
 				/>
 				<SideToggleGroup />
 
-				{/* SÉLECTEUR TARGET VERSION */}
 				<div className="group relative">
 					<Label className="bg-background text-muted-foreground pointer-events-none absolute start-1 top-0 z-10 block -translate-y-1/2 px-2 text-xs font-medium group-has-disabled:opacity-50">
 						Target Version
@@ -327,7 +331,6 @@ function RouteComponent() {
 					</Select>
 				</div>
 
-				{/* SÉLECTEUR DE PROFILS DE MODS */}
 				<div className="flex items-center gap-2 border-l border-border pl-2 ml-1">
 					<Select
 						onValueChange={(val) =>
@@ -418,7 +421,6 @@ function RouteComponent() {
 					Import Mods
 				</Button>
 
-				{/* COMPTEUR DE MODS ET UPDATE ALL */}
 				{side === "installed" && instMods && (
 					<div className="flex items-center gap-3 ml-auto border-l border-border pl-3">
 						<div className="flex flex-col text-right justify-center">
@@ -435,6 +437,7 @@ function RouteComponent() {
 							<UpdateAllButton
 								installation={installation}
 								installedMods={instMods.mods}
+								lockedMods={lockedMods}
 								updates={modUpdates}
 							/>
 						)}

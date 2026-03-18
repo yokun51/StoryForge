@@ -3,7 +3,7 @@ use reqwest::{get, Client};
 use serde::{Deserialize, Serialize};
 use serde_json::{from_str, from_value, json, to_string_pretty, Value};
 use std::{
-    fs::{create_dir_all, read_dir, remove_file, File},
+    fs::{create_dir_all, read_dir, File},
     io::{Read, Write},
     path::{Path, PathBuf},
     str::FromStr,
@@ -128,9 +128,9 @@ pub struct ModsResult {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModError {
-    pub file: String,    // the .zip path (or entry path)
-    pub stage: String,   // e.g. "read_dir", "open_zip", "read_entry", "parse_json"
-    pub message: String, // human-readable details
+    pub file: String,
+    pub stage: String,
+    pub message: String,
 }
 
 #[command]
@@ -156,7 +156,6 @@ pub async fn fetch_mod_tags() -> Result<Vec<ModTags>, UiError> {
 
 #[command]
 pub async fn fetch_mods(options: FetchModsParams) -> Result<Vec<Mod>, UiError> {
-    // Use the parameters for a GET request with search parameters
     let client = Client::new();
 
     let mut params = Vec::new();
@@ -225,7 +224,6 @@ pub async fn fetch_authors(search: String) -> Result<Value, UiError> {
 
 #[command]
 pub async fn add_mod_to_installation(path: String, url: String) -> Result<String, UiError> {
-    // Download the mod from the url and save it to the Mods directory inside the path
     let pb = PathBuf::from(path).join("Mods");
     if !pb.exists() {
         create_dir_all(&pb).map_err(|e| UiError {
@@ -316,7 +314,6 @@ pub fn get_mods(path: String) -> Result<ModsResult, UiError> {
             continue;
         }
 
-        // Open the zip file
         let file = match File::open(&path) {
             Ok(f) => f,
             Err(e) => {
@@ -329,7 +326,6 @@ pub fn get_mods(path: String) -> Result<ModsResult, UiError> {
             }
         };
 
-        // Build archive
         let mut archive = match ZipArchive::new(file) {
             Ok(a) => a,
             Err(e) => {
@@ -342,7 +338,6 @@ pub fn get_mods(path: String) -> Result<ModsResult, UiError> {
             }
         };
 
-        // Search for modinfo.json (case-insensitive) anywhere in the archive
         let mut found_any = false;
         let mut found_valid = false;
 
@@ -381,14 +376,11 @@ pub fn get_mods(path: String) -> Result<ModsResult, UiError> {
                     stage: "read_entry".into(),
                     message: e.to_string(),
                 });
-                // keep searching other entries
                 continue;
             }
 
             match json5_from_str::<Value>(&contents) {
                 Ok(json) => {
-                    // Successfully parsed modinfo.json
-                    // Case-insensitive lookup for a key named "modid"; allow string or number.
                     let modid = json
                         .as_object()
                         .and_then(|obj| {
@@ -404,7 +396,6 @@ pub fn get_mods(path: String) -> Result<ModsResult, UiError> {
                             } else if let Some(n) = v.as_u64() {
                                 n.to_string()
                             } else if let Some(n) = v.as_f64() {
-                                // Avoid scientific notation for whole numbers
                                 if n.fract() == 0.0 {
                                     (n as i64).to_string()
                                 } else {
@@ -458,7 +449,6 @@ pub fn get_mods(path: String) -> Result<ModsResult, UiError> {
                         path,
                     });
                     found_valid = true;
-                    // If you only want the first valid modinfo.json per zip, break here:
                     break;
                 }
                 Err(e) => {
@@ -467,14 +457,11 @@ pub fn get_mods(path: String) -> Result<ModsResult, UiError> {
                         stage: "parse_json".into(),
                         message: e.to_string(),
                     });
-                    // keep searching for another modinfo.json in the same zip
                 }
             }
         }
 
-        // If zip had a modinfo.json but all were invalid/unreadable
         if found_any && !found_valid {
-            // already recorded detailed errors per entry; optional summary:
             errors.push(ModError {
                 file: path.to_string_lossy().into_owned(),
                 stage: "zip_summary".into(),
@@ -482,7 +469,6 @@ pub fn get_mods(path: String) -> Result<ModsResult, UiError> {
             });
         }
 
-        // If no modinfo.json at all, you can decide whether to add a notice:
         if !found_any {
             errors.push(ModError {
                 file: path.to_string_lossy().into_owned(),
@@ -499,7 +485,6 @@ pub fn get_mods(path: String) -> Result<ModsResult, UiError> {
 pub fn get_mod_configs(app: AppHandle, installation_id: u64) -> Result<Vec<Value>, UiError> {
     let installation_zustand = app.zustand().get("installations", "installations").unwrap();
     let installation_json: Value = from_value(installation_zustand).unwrap();
-    // Find installation with matching id
     let installation = installation_json.as_array().and_then(|arr| {
         arr.iter()
             .find(|inst| inst["id"].as_u64() == Some(installation_id))
@@ -508,7 +493,6 @@ pub fn get_mod_configs(app: AppHandle, installation_id: u64) -> Result<Vec<Value
     let installation = match installation {
         Some(inst) => inst,
         None => {
-            // Optionally, log the error or handle it as needed
             return Err(UiError {
                 name: "installation_not_found".into(),
                 message: format!("Installation with id {} not found", installation_id),
@@ -523,7 +507,6 @@ pub fn get_mod_configs(app: AppHandle, installation_id: u64) -> Result<Vec<Value
             message: mod_config_path.to_string_lossy().into_owned(),
         });
     }
-    // Traverse the ModConfig directory and read all .json files
     let mut configs = Vec::new();
     for entry in
         read_dir(mod_config_path).map_err(|e| UiError::from(format!("Read dir error: {e}")))?
@@ -533,7 +516,6 @@ pub fn get_mod_configs(app: AppHandle, installation_id: u64) -> Result<Vec<Value
         if path.is_file() {
             if let Some(ext) = path.extension() {
                 if ext == "json" {
-                    // Output should be an array of objects with "filename" and "content"
                     let filename = path
                         .file_name()
                         .and_then(|s| s.to_str())
@@ -565,7 +547,6 @@ pub fn save_mod_config(
     file: String,
     new_code: String,
 ) -> Result<(), UiError> {
-    // Find installation path from zustand
     let installation_zustand = app.zustand().get("installations", "installations").unwrap();
     let installation_json: Value = from_value(installation_zustand).unwrap();
     let installation = installation_json.as_array().and_then(|arr| {
@@ -599,7 +580,6 @@ pub fn save_mod_config(
         });
     }
 
-    // Write new code to the file
     let mut f = File::create(&file_path).map_err(|e| UiError {
         name: "create_file_failed".into(),
         message: format!("Failed to create file: {e}"),
@@ -656,19 +636,9 @@ pub fn get_installation_mods(app: AppHandle, id: i64) -> Result<Vec<OutputMod>, 
 #[command]
 pub async fn remove_mod_from_installation(params: ModRemoveParams) -> Result<String, UiError> {
     let mods_path = PathBuf::from(&params.path).join("Mods");
-    if !mods_path.exists() || !mods_path.is_dir() {
-        return Err(UiError {
-            name: "not_found".into(),
-            message: mods_path.to_string_lossy().into_owned(),
-        });
-    }
     let mod_file = PathBuf::from(&params.modpath);
-    if !mod_file.exists() || !mod_file.is_file() {
-        return Err(UiError {
-            name: "not_found".into(),
-            message: mod_file.to_string_lossy().into_owned(),
-        });
-    }
+
+    // Vérification de sécurité pour s'assurer qu'on ne supprime rien en dehors du dossier Mods
     if mod_file.parent().map(|p| p != mods_path).unwrap_or(true) {
         return Err(UiError {
             name: "invalid_path".into(),
@@ -679,11 +649,30 @@ pub async fn remove_mod_from_installation(params: ModRemoveParams) -> Result<Str
             ),
         });
     }
-    remove_file(&mod_file).map_err(|e| UiError {
-        name: "remove_failed".into(),
-        message: format!("Failed to remove mod file: {e}"),
-    })?;
-    Ok("removed".into())
+
+    let mut retries = 5;
+    loop {
+        // Tente de supprimer le fichier de force
+        match std::fs::remove_file(&mod_file) {
+            Ok(_) => return Ok("removed".into()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok("removed".into()),
+            Err(e) => {
+                retries -= 1;
+                if retries == 0 {
+                    return Err(UiError {
+                        name: "remove_failed".into(),
+                        message: format!(
+                            "Failed to remove mod file '{}': {}",
+                            mod_file.display(),
+                            e
+                        ),
+                    });
+                }
+                // Pause de 200ms avant de réessayer, au cas où l'antivirus ou un autre process lit le fichier
+                std::thread::sleep(std::time::Duration::from_millis(200));
+            }
+        }
+    }
 }
 
 #[command]
@@ -771,7 +760,6 @@ pub fn toggle_mod_state(
 
     if let Some(arr) = disabled_mods.as_array_mut() {
         if enable {
-            // Si on active, on retire le mod de la liste des mods désactivés (format exact ou format @version)
             arr.retain(|v| {
                 if let Some(s) = v.as_str() {
                     s != modid && !s.starts_with(&format!("{}@", modid))
@@ -780,7 +768,6 @@ pub fn toggle_mod_state(
                 }
             });
         } else {
-            // Si on désactive, on l'ajoute (s'il n'y est pas déjà)
             let already_disabled = arr.iter().any(|v| {
                 if let Some(s) = v.as_str() {
                     s == modid || s.starts_with(&format!("{}@", modid))
@@ -835,6 +822,84 @@ pub fn set_disabled_mods(path: String, disabled_mods: Vec<String>) -> Result<(),
     let json_disabled_mods: Vec<Value> = disabled_mods.into_iter().map(Value::String).collect();
 
     settings_obj.insert("disabledMods".to_string(), Value::Array(json_disabled_mods));
+
+    let content = to_string_pretty(&json).map_err(|e| UiError {
+        name: "serialize_error".into(),
+        message: format!("Failed to serialize: {}", e),
+    })?;
+
+    if let Some(parent) = clientsettings_path.parent() {
+        std::fs::create_dir_all(parent).ok();
+    }
+
+    std::fs::write(&clientsettings_path, content).map_err(|e| UiError {
+        name: "write_error".into(),
+        message: format!("Failed to write: {}", e),
+    })?;
+    Ok(())
+}
+
+#[command]
+pub fn get_locked_mods(path: String) -> Result<Vec<String>, UiError> {
+    let clientsettings_path = Path::new(&path).join("clientsettings.json");
+    if !clientsettings_path.exists() {
+        return Ok(vec![]);
+    }
+    let content = std::fs::read_to_string(&clientsettings_path).unwrap_or_default();
+    let json: Value = serde_json::from_str(&content).unwrap_or(json!({}));
+
+    let locked_mods = json
+        .get("stringListSettings")
+        .and_then(|sls| sls.get("lockedMods"))
+        .and_then(|dm| dm.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(String::from))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    Ok(locked_mods)
+}
+
+#[command]
+pub fn toggle_mod_lock(path: String, modid: String, lock: bool) -> Result<(), UiError> {
+    let clientsettings_path = Path::new(&path).join("clientsettings.json");
+    let mut json: Value = if clientsettings_path.exists() {
+        let content = std::fs::read_to_string(&clientsettings_path).unwrap_or_default();
+        serde_json::from_str(&content).unwrap_or(json!({}))
+    } else {
+        json!({})
+    };
+
+    if !json.is_object() {
+        json = json!({});
+    }
+
+    let obj = json.as_object_mut().unwrap();
+
+    let string_list_settings = obj.entry("stringListSettings").or_insert(json!({}));
+    if !string_list_settings.is_object() {
+        *string_list_settings = json!({});
+    }
+
+    let settings_obj = string_list_settings.as_object_mut().unwrap();
+    let locked_mods = settings_obj.entry("lockedMods").or_insert(json!([]));
+
+    if !locked_mods.is_array() {
+        *locked_mods = json!([]);
+    }
+
+    if let Some(arr) = locked_mods.as_array_mut() {
+        if lock {
+            let already_locked = arr.iter().any(|v| v.as_str() == Some(&modid));
+            if !already_locked {
+                arr.push(json!(modid));
+            }
+        } else {
+            arr.retain(|v| v.as_str() != Some(&modid));
+        }
+    }
 
     let content = to_string_pretty(&json).map_err(|e| UiError {
         name: "serialize_error".into(),
