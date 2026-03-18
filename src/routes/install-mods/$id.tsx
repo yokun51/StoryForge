@@ -1,6 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { FolderDownIcon, SaveIcon, TrashIcon } from "lucide-react";
+import {
+	FileJsonIcon,
+	FolderDownIcon,
+	SaveIcon,
+	TrashIcon,
+} from "lucide-react";
 import { useRef } from "react";
 import { toast } from "sonner";
 import { AuthorAutocomplete } from "@/components/auto-completes/author.auto-complete";
@@ -433,6 +438,15 @@ function RouteComponent() {
 				>
 					<FolderDownIcon className="w-4 h-4 mr-2" />
 					Import Mods
+				</Button>
+
+				<Button
+					className="h-9 ml-2"
+					onClick={() => openDialog("ImportModsJsonDialog", { installation })}
+					variant="outline"
+				>
+					<FileJsonIcon className="w-4 h-4 mr-2" />
+					Import from JSON
 				</Button>
 
 				{side === "installed" && instMods && (
