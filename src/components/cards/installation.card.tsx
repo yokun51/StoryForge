@@ -2,7 +2,7 @@ import { formatDistanceToNow } from "date-fns";
 import {
 	CopyIcon,
 	DownloadCloudIcon,
-	PackagePlusIcon,
+	PackageSearchIcon,
 	Pencil,
 	Play,
 	Star,
@@ -138,14 +138,14 @@ export function InstallationCard({
 									/>
 								}
 							>
-								<PackagePlusIcon className="h-4 w-4" />
+								<PackageSearchIcon className="h-4 w-4" />
 								<span className="sr-only">
-									Add mods to {installation.name.trim()}
+									Manage mods for {installation.name.trim()}
 								</span>
 							</GroupItem>
 						}
 					/>
-					<TooltipContent>Add mods</TooltipContent>
+					<TooltipContent>Manage mods</TooltipContent>
 				</Tooltip>
 				<Tooltip>
 					<TooltipTrigger

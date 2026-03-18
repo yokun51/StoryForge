@@ -25,6 +25,15 @@ export type ModsFilters = {
 		| "updated"
 		| "status"
 		| "locked";
+	lastSortGlobal:
+		| "created"
+		| "name"
+		| "trending"
+		| "downloads"
+		| "follows"
+		| "comments"
+		| "updated";
+	lastSortInstalled: ModsFilters["sortBy"];
 	setSortBy: (key: ModsFilters["sortBy"]) => void;
 	orderDirection: "ascending" | "descending";
 	setOrderDirection: (direction: ModsFilters["orderDirection"]) => void;
@@ -51,6 +60,8 @@ export const useModsFilters = create<ModsFilters>()((set) => ({
 		})),
 	author: "",
 	category: "mod",
+	lastSortGlobal: "trending",
+	lastSortInstalled: "status",
 	orderDirection: "ascending",
 	removeAllGameVersions: () => set({ selectedGameVersions: [] }),
 	removeAllModTags: () => set({ selectedModTags: [] }),
@@ -71,15 +82,27 @@ export const useModsFilters = create<ModsFilters>()((set) => ({
 	setCategory: (category) => set({ category }),
 	setOrderDirection: (direction) => set({ orderDirection: direction }),
 	setSearchText: (text) => set({ searchText: text }),
-	setSide: (side) => {
-		// Logique pour mettre "name" par défaut quand on bascule sur "installed"
-		if (side === "installed") {
-			set({ side, sortBy: "name" });
-		} else {
-			set({ side });
-		}
-	},
-	setSortBy: (key) => set({ sortBy: key }),
+	setSide: (side) =>
+		set((state) => {
+			// Restaure le tri mémorisé selon la tab ou utilise les valeurs par défaut
+			if (side === "installed") {
+				return { side, sortBy: state.lastSortInstalled || "name" };
+			} else {
+				return { side, sortBy: state.lastSortGlobal || "trending" };
+			}
+		}),
+	setSortBy: (key) =>
+		set((state) => {
+			// Sauvegarde le tri indépendamment dans la mémoire locale
+			if (state.side === "installed") {
+				return { lastSortInstalled: key, sortBy: key };
+			} else {
+				return {
+					lastSortGlobal: key as ModsFilters["lastSortGlobal"],
+					sortBy: key,
+				};
+			}
+		}),
 	setTargetUpdateVersion: (version) => set({ targetUpdateVersion: version }),
 	setTargetVersionMode: (mode) => set({ targetVersionMode: mode }),
 	side: "any",
