@@ -103,13 +103,11 @@ function RouteComponent() {
 	const { data: lockedModsData } = useLockedMods(installation.path);
 	const { mutate: setDisabledMods } = useSetDisabledMods(installation.path);
 
-	// Utilisation des propriétés sauvegardées dans l'installation
 	const selectedProfileId = installation.selectedModProfileId ?? null;
 	const actualTargetVersion = (
 		installation.targetVersion || installation.version
 	).replace("-local", "");
 
-	// Profil actif et état de vérification (pour voir si les mods actuels correspondent exactement au profil)
 	const activeProfile = installation.modProfiles?.find(
 		(p) => p.id === selectedProfileId,
 	);
@@ -447,7 +445,7 @@ function RouteComponent() {
 					variant="outline"
 				>
 					<FolderDownIcon className="w-4 h-4 mr-2" />
-					Import Mods
+					Import Local
 				</Button>
 
 				<Button
@@ -456,7 +454,7 @@ function RouteComponent() {
 					variant="outline"
 				>
 					<FileJsonIcon className="w-4 h-4 mr-2" />
-					Import from JSON
+					Smart Import
 				</Button>
 
 				{side === "installed" && instMods && (
