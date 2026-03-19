@@ -35,8 +35,13 @@ export type ModsFilters = {
 		| "updated";
 	lastSortInstalled: ModsFilters["sortBy"];
 	setSortBy: (key: ModsFilters["sortBy"]) => void;
+
+	// Nouvelles propriétés pour mémoriser l'ordre
 	orderDirection: "ascending" | "descending";
+	lastOrderGlobal: "ascending" | "descending";
+	lastOrderInstalled: "ascending" | "descending";
 	setOrderDirection: (direction: ModsFilters["orderDirection"]) => void;
+
 	author: string;
 	setAuthor: (author: ModsFilters["author"]) => void;
 	side: "any" | "client" | "server" | "both" | "installed";
@@ -58,9 +63,11 @@ export const useModsFilters = create<ModsFilters>()((set) => ({
 		})),
 	author: "",
 	category: "mod",
+	lastOrderGlobal: "descending",
+	lastOrderInstalled: "ascending",
 	lastSortGlobal: "trending",
 	lastSortInstalled: "status",
-	orderDirection: "ascending",
+	orderDirection: "descending", // Par défaut (Trending -> Descending)
 	removeAllGameVersions: () => set({ selectedGameVersions: [] }),
 	removeAllModTags: () => set({ selectedModTags: [] }),
 	removeGameVersion: (version) =>
@@ -78,14 +85,29 @@ export const useModsFilters = create<ModsFilters>()((set) => ({
 	selectedModTags: [],
 	setAuthor: (author) => set({ author }),
 	setCategory: (category) => set({ category }),
-	setOrderDirection: (direction) => set({ orderDirection: direction }),
+	setOrderDirection: (direction) =>
+		set((state) => {
+			if (state.side === "installed") {
+				return { lastOrderInstalled: direction, orderDirection: direction };
+			} else {
+				return { lastOrderGlobal: direction, orderDirection: direction };
+			}
+		}),
 	setSearchText: (text) => set({ searchText: text }),
 	setSide: (side) =>
 		set((state) => {
 			if (side === "installed") {
-				return { side, sortBy: state.lastSortInstalled || "name" };
+				return {
+					orderDirection: state.lastOrderInstalled || "ascending",
+					side,
+					sortBy: state.lastSortInstalled || "name",
+				};
 			} else {
-				return { side, sortBy: state.lastSortGlobal || "trending" };
+				return {
+					orderDirection: state.lastOrderGlobal || "descending",
+					side,
+					sortBy: state.lastSortGlobal || "trending",
+				};
 			}
 		}),
 	setSortBy: (key) =>
