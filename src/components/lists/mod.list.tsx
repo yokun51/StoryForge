@@ -1,11 +1,34 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { measureElement, useVirtualizer } from "@tanstack/react-virtual";
 import { invoke } from "@tauri-apps/api/core";
-import { useCallback, useMemo } from "react";
+import {
+	CheckSquareIcon,
+	DownloadCloudIcon,
+	LockIcon,
+	TrashIcon,
+	UnlockIcon,
+	XSquareIcon,
+} from "lucide-react";
+import { useCallback, useMemo, useState } from "react";
+import { toast } from "sonner";
+import {
+	AlertDialog,
+	AlertDialogClose,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import { useDisabledMods } from "@/hooks/use-disabled-mods";
 import { useInstalledMods } from "@/hooks/use-installed-mods";
 import { useLockedMods } from "@/hooks/use-locked-mods";
 import { useModUpdates } from "@/hooks/use-mod-updates";
+import type { ModInfo } from "@/lib/types";
+import { getTargetRelease, pathDelimiter } from "@/lib/utils";
 import type { OutputMod } from "@/routes/install-mods/$id";
 import type { Installation } from "@/stores/installations";
 import { useModsFilters } from "@/stores/modsFilters";
@@ -17,7 +40,7 @@ type ModsParams = {
 };
 
 export type Mod = {
-	modid: number;
+	modid: number | string;
 	assetid: number;
 	downloads: number;
 	follows: number;
@@ -49,6 +72,8 @@ export function ModList({
 	parentRef: React.RefObject<HTMLDivElement | null>;
 	installation: Installation;
 }) {
+	const queryClient = useQueryClient();
+
 	const {
 		searchText,
 		selectedModTags,
@@ -58,7 +83,14 @@ export function ModList({
 		author,
 		side,
 		category,
+		targetVersionMode,
 	} = useModsFilters();
+
+	const actualTargetVersion = (
+		installation?.targetVersion ||
+		installation?.version ||
+		""
+	).replace("-local", "");
 
 	const { data: mods } = useQuery(
 		modsQuery({
@@ -87,17 +119,15 @@ export function ModList({
 	);
 
 	// Optimisation : Création d'une Map O(1) des mods installés
-	// Prend en charge le mode hors-ligne
+	// Prend en charge le mode hors-ligne. (Utilisation de toString() pour éviter le bug NaN des mods locaux)
 	const installedModMap = useMemo(() => {
-		const map = new Map<number, OutputMod>();
+		const map = new Map<string, OutputMod>();
 		if (installedMods.length === 0) return map;
 
-		// 1. Ajouter les IDs locaux pour le mode hors-ligne
 		for (const inst of installedMods) {
-			map.set(inst.modid, inst);
+			map.set(inst.modid.toString(), inst);
 		}
 
-		// 2. Associer les vrais IDs API si on est en ligne
 		if (mods) {
 			for (const mod of mods) {
 				const inst = installedMods.find(
@@ -110,7 +140,7 @@ export function ModList({
 						instMod.name.toLowerCase() === mod.name.toLowerCase(),
 				);
 				if (inst) {
-					map.set(mod.modid, inst);
+					map.set(mod.modid.toString(), inst);
 				}
 			}
 		}
@@ -123,7 +153,6 @@ export function ModList({
 			return mods || [];
 		}
 
-		// En mode "Installed", on se base toujours sur les fichiers locaux pour le hors-ligne
 		return installedMods.map((instMod) => {
 			const apiMod = mods?.find(
 				(mod) =>
@@ -138,14 +167,14 @@ export function ModList({
 			if (apiMod) return apiMod;
 
 			return {
-				assetid: instMod.modid,
+				assetid: Number(instMod.modid) || 0,
 				author: instMod.authors?.[0] || "Unknown",
 				comments: 0,
 				downloads: 0,
 				follows: 0,
 				lastreleased: new Date(0).toISOString(),
 				logo: null,
-				modid: instMod.modid,
+				modid: instMod.modid.toString(),
 				modidstrs: [instMod.modid.toString()],
 				name: instMod.name,
 				side: "both",
@@ -162,7 +191,6 @@ export function ModList({
 	const modsList = useMemo(() => {
 		return baseModsList
 			?.filter((mod) => {
-				// En mode 'installed', on fait la recherche textuelle localement pour le mode offline
 				if (side === "installed" && searchText) {
 					const searchLower = searchText.toLowerCase();
 					return (
@@ -189,18 +217,17 @@ export function ModList({
 				if (side === "installed" && !mods) return true; // Sécurité hors-ligne
 				return mod.type === category;
 			})
-			?.filter(
-				(mod) =>
-					side !== "installed"
-						? side === "any"
-							? true
-							: mod.side === side
-						: true, // baseModsList est déjà garanti de ne contenir que des installés
+			?.filter((mod) =>
+				side !== "installed"
+					? side === "any"
+						? true
+						: mod.side === side
+					: true,
 			)
 			.sort((a, b) => {
 				if (sortBy === "locked") {
-					const aInst = installedModMap.get(a.modid);
-					const bInst = installedModMap.get(b.modid);
+					const aInst = installedModMap.get(a.modid.toString());
+					const bInst = installedModMap.get(b.modid.toString());
 
 					const aLocked =
 						aInst && lockedModsList.includes(aInst.modid.toString()) ? 1 : 0;
@@ -219,8 +246,8 @@ export function ModList({
 				}
 
 				if (sortBy === "status") {
-					const aInst = installedModMap.get(a.modid);
-					const bInst = installedModMap.get(b.modid);
+					const aInst = installedModMap.get(a.modid.toString());
+					const bInst = installedModMap.get(b.modid.toString());
 
 					const aDisabled =
 						!aInst ||
@@ -310,6 +337,200 @@ export function ModList({
 		disabledModsList,
 	]);
 
+	// ======= MULTI-SELECTION STATE =======
+	const [selectedMods, setSelectedMods] = useState<Set<string>>(new Set());
+	const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+
+	const allSelected =
+		modsList && modsList.length > 0 && selectedMods.size === modsList.length;
+
+	const handleSelectAll = () => {
+		if (allSelected) {
+			setSelectedMods(new Set());
+		} else {
+			setSelectedMods(new Set(modsList?.map((m) => m.modid.toString()) || []));
+		}
+	};
+
+	const toggleSelection = (modid: string) => {
+		setSelectedMods((prev) => {
+			const next = new Set(prev);
+			if (next.has(modid)) next.delete(modid);
+			else next.add(modid);
+			return next;
+		});
+	};
+
+	// ======= BATCH ACTIONS =======
+	const handleBulkEnable = async (enable: boolean) => {
+		const targets = Array.from(selectedMods)
+			.map((id) => installedModMap.get(id))
+			.filter(Boolean) as OutputMod[];
+
+		if (targets.length === 0)
+			return toast.info("No installed mods selected to enable/disable.");
+
+		toast.loading(
+			`${enable ? "Enabling" : "Disabling"} ${targets.length} mods...`,
+			{ id: "bulk-enable" },
+		);
+		try {
+			for (const inst of targets) {
+				await invoke("toggle_mod_state", {
+					enable,
+					modid: inst.modid.toString(),
+					path: installation.path,
+					version: inst.version,
+				});
+			}
+			await queryClient.invalidateQueries({
+				queryKey: ["disabled-mods", installation.path],
+			});
+			toast.success(
+				`Successfully ${enable ? "enabled" : "disabled"} ${targets.length} mods.`,
+				{ id: "bulk-enable" },
+			);
+		} catch (e) {
+			toast.error(`Error: ${e}`, { id: "bulk-enable" });
+		}
+	};
+
+	const handleBulkLock = async (lock: boolean) => {
+		const targets = Array.from(selectedMods)
+			.map((id) => installedModMap.get(id))
+			.filter(Boolean) as OutputMod[];
+
+		if (targets.length === 0)
+			return toast.info("No installed mods selected to lock/unlock.");
+
+		toast.loading(
+			`${lock ? "Locking" : "Unlocking"} ${targets.length} mods...`,
+			{ id: "bulk-lock" },
+		);
+		try {
+			for (const inst of targets) {
+				await invoke("toggle_mod_lock", {
+					lock,
+					modid: inst.modid.toString(),
+					path: installation.path,
+				});
+			}
+			await queryClient.invalidateQueries({
+				queryKey: ["locked-mods", installation.path],
+			});
+			toast.success(
+				`Successfully ${lock ? "locked" : "unlocked"} ${targets.length} mods.`,
+				{ id: "bulk-lock" },
+			);
+		} catch (e) {
+			toast.error(`Error: ${e}`, { id: "bulk-lock" });
+		}
+	};
+
+	const handleBulkDelete = async () => {
+		const targets = Array.from(selectedMods)
+			.map((id) => installedModMap.get(id))
+			.filter(Boolean) as OutputMod[];
+
+		if (targets.length === 0) {
+			toast.info("No installed mods selected to delete.");
+			return setIsDeleteDialogOpen(false);
+		}
+
+		toast.loading(`Deleting ${targets.length} mods...`, { id: "bulk-delete" });
+		try {
+			for (const inst of targets) {
+				await invoke("remove_mod_from_installation", {
+					params: { modpath: inst.path, path: installation.path },
+				});
+			}
+			await queryClient.invalidateQueries({
+				queryKey: ["installationMods", installation.path],
+			});
+			setSelectedMods(new Set());
+			toast.success(`Successfully deleted ${targets.length} mods.`, {
+				id: "bulk-delete",
+			});
+		} catch (e) {
+			toast.error(`Error deleting mods: ${e}`, { id: "bulk-delete" });
+		}
+		setIsDeleteDialogOpen(false);
+	};
+
+	const handleBulkSyncOrInstall = async () => {
+		const selectedIds = Array.from(selectedMods);
+		if (selectedIds.length === 0) return;
+
+		toast.loading(`Checking versions for ${selectedIds.length} mods...`, {
+			id: "bulk-sync",
+		});
+		let processedCount = 0;
+
+		try {
+			for (const id of selectedIds) {
+				const inst = installedModMap.get(id);
+				const isInstalled = !!inst;
+
+				if (isInstalled && lockedModsList.includes(id)) continue;
+
+				try {
+					const modInfo = (await invoke("fetch_mod_info", {
+						modid: id,
+					})) as ModInfo;
+
+					const targetRelease = getTargetRelease(
+						modInfo.mod.releases,
+						actualTargetVersion,
+						targetVersionMode,
+					);
+
+					if (!targetRelease) continue;
+
+					if (!isInstalled || targetRelease.modversion !== inst.version) {
+						processedCount++;
+						toast.loading(`Processing ${modInfo.mod.name}...`, {
+							id: "bulk-sync",
+						});
+
+						if (isInstalled) {
+							await invoke("remove_mod_from_installation", {
+								params: { modpath: inst.path, path: installation.path },
+							});
+						}
+
+						await invoke("download_and_maybe_extract", {
+							destpath: `${installation.path}${pathDelimiter}Mods`,
+							emitevent: `bulk-sync-${id}`,
+							extract: false,
+							url: targetRelease.mainfile,
+						});
+					}
+				} catch (err) {
+					console.warn(`Could not process mod ${id} (possibly local):`, err);
+				}
+			}
+
+			await queryClient.invalidateQueries({
+				queryKey: ["installationMods", installation.path],
+			});
+			await queryClient.invalidateQueries({
+				queryKey: ["modUpdates", installation.id],
+			});
+
+			if (processedCount > 0) {
+				toast.success(`Successfully processed ${processedCount} mod(s).`, {
+					id: "bulk-sync",
+				});
+			} else {
+				toast.success(`Selected mods are already synced, locked, or local.`, {
+					id: "bulk-sync",
+				});
+			}
+		} catch (e) {
+			toast.error(`Error processing mods: ${e}`, { id: "bulk-sync" });
+		}
+	};
+
 	const estimateSize = useCallback(() => 81, []);
 
 	const rowVirtualizer = useVirtualizer({
@@ -324,35 +545,130 @@ export function ModList({
 	const totalSize = rowVirtualizer.getTotalSize();
 
 	return (
-		<div
-			className="relative"
-			style={{
-				height: totalSize,
-			}}
-		>
-			{modsList &&
-				items.map((item) => {
-					const mod = modsList[item.index];
-					return (
-						<div
-							className="not-last:border-b flex gap-2 absolute top-0 left-0 w-full"
-							data-index={item.index}
-							key={mod.modid}
-							ref={rowVirtualizer.measureElement}
-							style={{
-								transform: `translateY(${item.start}px)`,
-								willChange: "transform",
-							}}
+		<>
+			{/* Non-Sticky Bulk Action Header */}
+			<div className="flex items-center gap-4 px-4 py-2.5 -mt-2 -mx-2 mb-2 border-b bg-card min-h-[50px]">
+				<div className="flex items-center gap-2 shrink-0">
+					<Checkbox
+						checked={allSelected}
+						id="select-all"
+						onCheckedChange={handleSelectAll}
+					/>
+					<Label
+						className="text-sm font-medium cursor-pointer select-none"
+						htmlFor="select-all"
+					>
+						{selectedMods.size > 0
+							? `${selectedMods.size} selected`
+							: "Select All"}
+					</Label>
+				</div>
+				{selectedMods.size > 0 && (
+					<div className="flex items-center gap-2 ml-auto flex-wrap justify-end">
+						<Button
+							onClick={() => handleBulkSyncOrInstall()}
+							size="sm"
+							variant="outline"
 						>
-							<ModItem
-								installation={installation}
-								installedMods={installedMods}
-								mod={mod}
-								modUpdates={modUpdates}
-							/>
-						</div>
-					);
-				})}
-		</div>
+							<DownloadCloudIcon className="w-4 h-4 mr-2" /> Sync / Install
+						</Button>
+						<Button
+							onClick={() => handleBulkEnable(true)}
+							size="sm"
+							variant="outline"
+						>
+							<CheckSquareIcon className="w-4 h-4 mr-2 text-success" /> Enable
+						</Button>
+						<Button
+							onClick={() => handleBulkEnable(false)}
+							size="sm"
+							variant="outline"
+						>
+							<XSquareIcon className="w-4 h-4 mr-2 text-destructive" /> Disable
+						</Button>
+						<Button
+							onClick={() => handleBulkLock(true)}
+							size="sm"
+							variant="outline"
+						>
+							<LockIcon className="w-4 h-4 mr-2" /> Lock
+						</Button>
+						<Button
+							onClick={() => handleBulkLock(false)}
+							size="sm"
+							variant="outline"
+						>
+							<UnlockIcon className="w-4 h-4 mr-2" /> Unlock
+						</Button>
+						<Button
+							onClick={() => setIsDeleteDialogOpen(true)}
+							size="sm"
+							variant="destructive"
+						>
+							<TrashIcon className="w-4 h-4 mr-2" /> Delete
+						</Button>
+					</div>
+				)}
+			</div>
+
+			<div
+				className="relative"
+				style={{
+					height: totalSize,
+				}}
+			>
+				{modsList &&
+					items.map((item) => {
+						const mod = modsList[item.index];
+						return (
+							<div
+								className="not-last:border-b flex gap-2 absolute top-0 left-0 w-full"
+								data-index={item.index}
+								key={mod.modid.toString()}
+								ref={rowVirtualizer.measureElement}
+								style={{
+									transform: `translateY(${item.start}px)`,
+									willChange: "transform",
+								}}
+							>
+								<ModItem
+									installation={installation}
+									installedMods={installedMods}
+									isSelected={selectedMods.has(mod.modid.toString())}
+									mod={mod}
+									modUpdates={modUpdates}
+									onSelect={() => toggleSelection(mod.modid.toString())}
+								/>
+							</div>
+						);
+					})}
+			</div>
+
+			{/* Bulk Delete Confirmation Dialog */}
+			<AlertDialog
+				onOpenChange={setIsDeleteDialogOpen}
+				open={isDeleteDialogOpen}
+			>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+						<AlertDialogDescription>
+							This will permanently delete {selectedMods.size} mods from the
+							installation{" "}
+							<span className="font-bold">{installation.name}</span>. Only
+							downloaded/installed mods will be affected.
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogClose render={<Button variant="outline" />}>
+							Cancel
+						</AlertDialogClose>
+						<Button onClick={handleBulkDelete} variant="destructive">
+							Delete {selectedMods.size} Mods
+						</Button>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
+		</>
 	);
 }

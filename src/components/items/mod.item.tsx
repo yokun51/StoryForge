@@ -13,6 +13,7 @@ import { useRef } from "react";
 import { toast } from "sonner";
 import type { Mod } from "@/components/lists/mod.list";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Group, GroupItem, GroupSeparator } from "@/components/ui/group";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -50,11 +51,15 @@ export function ModItem({
 	installedMods,
 	modUpdates,
 	installation,
+	isSelected,
+	onSelect,
 }: {
 	mod: Mod;
 	installedMods: OutputMod[];
 	modUpdates: ModUpdatesResponse | undefined;
 	installation: Installation | null;
+	isSelected?: boolean;
+	onSelect?: (checked: boolean) => void;
 }) {
 	const queryClient = useQueryClient();
 	const listenRef = useRef<UnlistenFn>(null);
@@ -110,10 +115,8 @@ export function ModItem({
 
 	const { openDialog } = useDialogStore();
 
-	// Suppression de targetUpdateVersion ici
 	const { setAuthor, targetVersionMode } = useModsFilters();
 
-	// Utilisation de la version sauvegardée dans l'installation
 	const actualTargetVersion = (
 		installation?.targetVersion ||
 		installation?.version ||
@@ -217,7 +220,7 @@ export function ModItem({
 	return (
 		<div
 			className={cn([
-				"flex flex-row p-2 justify-between w-full items-center",
+				"flex flex-row p-2 justify-between w-full items-center transition-colors min-w-0 overflow-hidden",
 				installedMod &&
 					!isCurrentlyDisabled &&
 					"bg-gradient-to-r from-success/20 to-transparent",
@@ -225,10 +228,19 @@ export function ModItem({
 					isCurrentlyDisabled &&
 					"bg-gradient-to-r from-muted/50 to-transparent opacity-80 grayscale",
 				isLocked && "border-l-4 border-l-primary",
+				isSelected && "bg-accent/40 ring-1 ring-ring inset-ring",
 			])}
 		>
-			<div className="flex flex-row gap-2">
+			<div className="flex flex-row gap-3 items-center min-w-0 flex-1">
+				{onSelect !== undefined && (
+					<Checkbox
+						checked={isSelected}
+						className="mr-1 shrink-0"
+						onCheckedChange={(c) => onSelect(!!c)}
+					/>
+				)}
 				<a
+					className="shrink-0"
 					href={`https://mods.vintagestory.at/${mod.urlalias ?? `show/mod/${mod.assetid}`}`}
 					onClick={(e) => {
 						if (isLocalOnly) e.preventDefault();
@@ -238,7 +250,7 @@ export function ModItem({
 				>
 					<img
 						alt={mod.name}
-						className="w-12 h-12 rounded hover:scale-105 transition-transform"
+						className="w-12 h-12 rounded hover:scale-105 transition-transform shrink-0"
 						loading="lazy"
 						onError={(e) => {
 							e.currentTarget.src = "/StoryForge.png";
@@ -248,10 +260,13 @@ export function ModItem({
 						}
 					/>
 				</a>
-				<div className="flex flex-col justify-center">
-					<div className="flex gap-1 items-center">
+				<div className="flex flex-col justify-center min-w-0 flex-1">
+					<div className="flex gap-1 items-center min-w-0">
 						<a
-							className={cn("font-semibold", !isLocalOnly && "hover:underline")}
+							className={cn(
+								"font-semibold truncate",
+								!isLocalOnly && "hover:underline",
+							)}
 							href={`https://mods.vintagestory.at/${mod.urlalias ?? `show/mod/${mod.assetid}`}`}
 							onClick={(e) => {
 								if (isLocalOnly) e.preventDefault();
@@ -259,15 +274,15 @@ export function ModItem({
 							rel="noreferrer"
 							target="_blank"
 						>
-							<h3 className="font-semibold">{mod.name}</h3>
+							<h3 className="font-semibold truncate">{mod.name}</h3>
 						</a>
-						<p className="text-xs opacity-50">by</p>
+						<p className="text-xs opacity-50 shrink-0">by</p>
 						<TooltipProvider>
 							<Tooltip>
 								<TooltipTrigger
 									render={
 										<button
-											className="text-xs opacity-50 text-orange-200 cursor-pointer bg-transparent border-none p-0 outline-none hover:underline"
+											className="text-xs opacity-50 text-orange-200 cursor-pointer bg-transparent border-none p-0 outline-none hover:underline truncate"
 											onClick={() => setAuthor(mod.author)}
 											type="button"
 										/>
@@ -281,7 +296,7 @@ export function ModItem({
 							</Tooltip>
 						</TooltipProvider>
 					</div>
-					<p className="text-sm text-muted-foreground line-clamp-1">
+					<p className="text-sm text-muted-foreground line-clamp-1 break-all pr-2">
 						{mod.summary}
 					</p>
 					<div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted-foreground mt-1 items-center">
@@ -331,7 +346,7 @@ export function ModItem({
 				</div>
 			</div>
 
-			<div className="flex items-center gap-4">
+			<div className="flex items-center gap-4 shrink-0 pl-2">
 				{installedMod && installation && (
 					<div className="flex items-center gap-2 shrink-0">
 						<Switch
@@ -549,7 +564,7 @@ export function ModItem({
 														onClick={() =>
 															openDialog("AddModDialog", {
 																installation,
-																modid: mod.modid,
+																modid: Number(mod.modid), // Fallback sécuritaire
 															})
 														}
 														size="icon"
