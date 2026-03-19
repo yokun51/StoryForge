@@ -6,7 +6,7 @@ import {
 	SaveIcon,
 	TrashIcon,
 } from "lucide-react";
-import { useRef } from "react";
+import { useMemo, useRef } from "react";
 import { toast } from "sonner";
 import { AuthorAutocomplete } from "@/components/auto-completes/author.auto-complete";
 import { UpdateAllButton } from "@/components/buttons/update-all.button";
@@ -175,6 +175,19 @@ function RouteComponent() {
 			}
 		}
 	}
+
+	// Calcule du nombre de mods actifs
+	const activeModsCount = useMemo(() => {
+		if (!instMods?.mods) return 0;
+		if (!disabledMods) return instMods.mods.length;
+
+		return instMods.mods.filter((mod) => {
+			const isDisabled = disabledMods.some(
+				(d) => d === mod.modid.toString() || d.startsWith(`${mod.modid}@`),
+			);
+			return !isDisabled;
+		}).length;
+	}, [instMods, disabledMods]);
 
 	const parentRef = useRef<HTMLDivElement>(null);
 
@@ -461,7 +474,7 @@ function RouteComponent() {
 					<div className="flex items-center gap-3 ml-auto border-l border-border pl-3">
 						<div className="flex flex-col text-right justify-center">
 							<span className="text-xs font-medium">
-								{instMods.mods.length} mod(s) installed
+								{activeModsCount} / {instMods.mods.length} mod(s) active
 							</span>
 							{modsToUpdateCount > 0 && (
 								<span className="text-[10px] text-warning-foreground font-medium">
