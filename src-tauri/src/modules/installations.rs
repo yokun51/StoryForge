@@ -32,31 +32,52 @@ fn sync_installation_paths(pb: &Path) {
         json!({})
     };
 
+    let mut changed = false;
+    let expected_mod_paths = json!(["Mods", mods_path.clone()]);
+
     if let Some(obj) = clientsettings.as_object_mut() {
         let string_list_settings = obj.entry("stringListSettings").or_insert(json!({}));
         if let Some(sls) = string_list_settings.as_object_mut() {
-            sls.insert("modPaths".into(), json!(["Mods", mods_path.clone()]));
+            if sls.get("modPaths") != Some(&expected_mod_paths) {
+                sls.insert("modPaths".into(), expected_mod_paths);
+                changed = true;
+            }
         }
     }
-    std::fs::create_dir_all(settings_path.parent().unwrap()).ok();
-    let _ = write(&settings_path, to_string_pretty(&clientsettings).unwrap());
+
+    if changed {
+        std::fs::create_dir_all(settings_path.parent().unwrap()).ok();
+        let _ = write(&settings_path, to_string_pretty(&clientsettings).unwrap());
+    }
 
     // 2. serverconfig.json
     let serverconfig_path = pb.join("serverconfig.json");
     if serverconfig_path.exists() {
         if let Ok(content) = std::fs::read_to_string(&serverconfig_path) {
             if let Ok(mut serverconfig) = from_str::<Value>(&content) {
+                let mut srv_changed = false;
+                let expected_srv_mod_paths = json!(["Mods", mods_path.clone()]);
+
                 if let Some(obj) = serverconfig.as_object_mut() {
-                    obj.insert("ModPaths".into(), json!(["Mods", mods_path.clone()]));
+                    if obj.get("ModPaths") != Some(&expected_srv_mod_paths) {
+                        obj.insert("ModPaths".into(), expected_srv_mod_paths);
+                        srv_changed = true;
+                    }
 
                     // Vide l'emplacement de sauvegarde pour éviter de charger le monde de l'ancienne installation
                     if let Some(world_config) =
                         obj.get_mut("WorldConfig").and_then(|w| w.as_object_mut())
                     {
-                        world_config.insert("SaveFileLocation".into(), json!(""));
+                        if world_config.get("SaveFileLocation") != Some(&json!("")) {
+                            world_config.insert("SaveFileLocation".into(), json!(""));
+                            srv_changed = true;
+                        }
                     }
                 }
-                let _ = write(&serverconfig_path, to_string_pretty(&serverconfig).unwrap());
+
+                if srv_changed {
+                    let _ = write(&serverconfig_path, to_string_pretty(&serverconfig).unwrap());
+                }
             }
         }
     }
@@ -77,12 +98,15 @@ pub async fn initialize_game(
     }
 
     // Si un profil local a été fourni, on crée le fichier clientsettings.json
+    // UNIQUEMENT s'il n'existe pas déjà, pour ne jamais écraser les paramètres existants !
     if let Some(settings) = client_settings {
         let settings_path = pb.join("clientsettings.json");
-        write(&settings_path, settings).map_err(|e| UiError {
-            name: "write_failed".into(),
-            message: format!("Failed to write clientsettings.json: {e}"),
-        })?;
+        if !settings_path.exists() {
+            write(&settings_path, settings).map_err(|e| UiError {
+                name: "write_failed".into(),
+                message: format!("Failed to write clientsettings.json: {e}"),
+            })?;
+        }
     }
 
     Ok("initialized".into())
@@ -170,39 +194,74 @@ pub fn play_game(app: AppHandle, options: Option<PlayGameParams>) -> Result<Stri
         });
     }
 
-    // Synchronisation forcée avant de lancer le jeu (Sécurité)
+    // Synchronisation forcée des chemins (Si nécessaire uniquement)
     sync_installation_paths(&pb);
 
-    // Application du profil utilisateur sélectionné s'il existe
+    // Récupération des informations du compte ou du mode local
     let account_result = app.zustand().get::<Value>("accounts", "selectedUser");
     let account = match account_result {
         Ok(val) if !val.is_null() => Some(val),
         _ => None,
     };
 
-    if let Some(account) = account {
-        let settings_path = pb.join("clientsettings.json");
-        let mut clientsettings: Value = if settings_path.exists() {
-            let content =
-                std::fs::read_to_string(&settings_path).unwrap_or_else(|_| "{}".to_string());
-            from_str(&content).unwrap_or(json!({}))
-        } else {
-            json!({})
-        };
+    let use_local_profile = app
+        .zustand()
+        .get::<bool>("settings", "useLocalProfile")
+        .unwrap_or(false);
+    let inst_version = installation["version"].as_str().unwrap_or("");
 
-        if let Some(obj) = clientsettings.as_object_mut() {
-            let string_settings = obj.entry("stringSettings").or_insert(json!({}));
-            if let Some(ss) = string_settings.as_object_mut() {
-                ss.insert("playeruid".into(), account["uid"].clone());
-                ss.insert("sessionkey".into(), account["sessionkey"].clone());
-                ss.insert(
-                    "sessionsignature".into(),
-                    account["sessionsignature"].clone(),
-                );
-                ss.insert("playername".into(), account["playername"].clone());
+    // Mise à jour ciblée (on n'écrit que si les valeurs d'identification ont changé)
+    let settings_path = pb.join("clientsettings.json");
+    let mut clientsettings: Value = if settings_path.exists() {
+        let content = std::fs::read_to_string(&settings_path).unwrap_or_else(|_| "{}".to_string());
+        from_str(&content).unwrap_or(json!({}))
+    } else {
+        json!({})
+    };
+
+    let mut settings_changed = false;
+
+    if let Some(obj) = clientsettings.as_object_mut() {
+        let string_settings = obj.entry("stringSettings").or_insert(json!({}));
+        if let Some(ss) = string_settings.as_object_mut() {
+            macro_rules! update_if_diff {
+                ($key:expr, $val:expr) => {
+                    if ss.get($key) != Some(&$val) {
+                        ss.insert($key.to_string(), $val);
+                        settings_changed = true;
+                    }
+                };
+            }
+
+            if use_local_profile && inst_version == "1.21.6-local" {
+                let local_name = app
+                    .zustand()
+                    .get::<String>("settings", "localPlayerName")
+                    .unwrap_or_else(|_| "Player".to_string());
+                let local_uid = app
+                    .zustand()
+                    .get::<String>("settings", "localPlayerUid")
+                    .unwrap_or_else(|_| "abc123xyz".to_string());
+                let local_email = app
+                    .zustand()
+                    .get::<String>("settings", "localUserEmail")
+                    .unwrap_or_else(|_| "player@example.com".to_string());
+
+                update_if_diff!("playeruid", json!(local_uid));
+                update_if_diff!("sessionkey", json!("1"));
+                update_if_diff!("sessionsignature", json!("1"));
+                update_if_diff!("playername", json!(local_name));
+                update_if_diff!("useremail", json!(local_email));
+            } else if let Some(acc) = account {
+                update_if_diff!("playeruid", acc["uid"].clone());
+                update_if_diff!("sessionkey", acc["sessionkey"].clone());
+                update_if_diff!("sessionsignature", acc["sessionsignature"].clone());
+                update_if_diff!("playername", acc["playername"].clone());
             }
         }
+    }
 
+    if settings_changed {
         let _ = write(&settings_path, to_string_pretty(&clientsettings).unwrap());
     }
 
@@ -221,7 +280,7 @@ pub fn play_game(app: AppHandle, options: Option<PlayGameParams>) -> Result<Stri
             options
                 .save
                 .as_ref()
-                // Extract the file stem from the save path to use as the output file name. This prevents creating files with double extensions, e.g., "output.mp4.mp4".
+                // Extract the file stem from the save path to use as the output file name.
                 .map(|s| {
                     let save_path = Path::new(s);
                     let file_stem = save_path.file_stem().unwrap_or_default().to_string_lossy();
@@ -259,13 +318,10 @@ pub fn play_game(app: AppHandle, options: Option<PlayGameParams>) -> Result<Stri
     let timeout = Duration::from_secs(25);
     let start_instant = Instant::now();
 
-    // Combine stdout & stderr watching: spawn a thread per stream
-    // Use an Arc flag to coordinate (optional simplification)
     let found_flag = Arc::new(AtomicBool::new(false));
     let found_flag_stdout = found_flag.clone();
     let found_flag_stderr = found_flag.clone();
 
-    // Helper closure to parse line & emit success
     let emit_success = move |app_handle: &AppHandle, line: &str| {
         if let Some(idx) = line.find(target_prefix) {
             let version_part = line[idx + target_prefix.len()..].trim();
@@ -284,7 +340,6 @@ pub fn play_game(app: AppHandle, options: Option<PlayGameParams>) -> Result<Stri
         }
     };
 
-    // stdout watcher
     if let Some(stdout) = child.stdout.take() {
         let app_clone = app_handle.clone();
         thread::spawn(move || {
@@ -307,7 +362,6 @@ pub fn play_game(app: AppHandle, options: Option<PlayGameParams>) -> Result<Stri
             }
         });
     }
-    // stderr watcher (some builds might log there)
     if let Some(stderr) = child.stderr.take() {
         let app_clone = app_handle.clone();
         thread::spawn(move || {
@@ -331,7 +385,6 @@ pub fn play_game(app: AppHandle, options: Option<PlayGameParams>) -> Result<Stri
         });
     }
 
-    // Timeout monitor thread: after timeout if not found emit failure.
     let app_for_timeout = app_handle.clone();
     thread::spawn(move || {
         while start_instant.elapsed() < timeout {
@@ -360,37 +413,30 @@ pub fn reveal_in_file_explorer(path: String) -> Result<String, UiError> {
     let path = Path::new(&path);
 
     if cfg!(target_os = "windows") {
-        // Validate path exists, create directory if needed
         if !path.exists() {
-            // If path doesn't exist, it should be a directory - create it
             create_dir_all(path).map_err(|e| UiError {
                 name: "create_dir_failed".into(),
                 message: format!("Failed to create directory: {e}"),
             })?;
         }
 
-        // Now that we've ensured the path exists, open it
         if path.is_file() {
-            // If it's a file, use /select to highlight it
             Command::new("explorer")
                 .args(["/select,", &path.as_os_str().to_string_lossy()])
                 .status()
                 .map_err(|e| UiError::from(format!("Failed to open explorer: {e}")))?;
         } else if path.is_dir() {
-            // If it's a directory, just open it
             Command::new("explorer")
                 .arg(path.as_os_str().to_string_lossy().into_owned())
                 .status()
                 .map_err(|e| UiError::from(format!("Failed to open explorer: {e}")))?;
         } else {
-            // This shouldn't happen after we created the directory, but handle it anyway
             return Err(UiError {
                 name: "invalid_path".into(),
                 message: format!("Path is neither a file nor directory: {}", path.display()),
             });
         }
     } else if cfg!(target_os = "macos") {
-        // Validate path exists, create directory if needed
         if !path.exists() {
             create_dir_all(path).map_err(|e| UiError {
                 name: "create_dir_failed".into(),
@@ -415,7 +461,6 @@ pub fn reveal_in_file_explorer(path: String) -> Result<String, UiError> {
             });
         }
     } else if cfg!(target_os = "linux") {
-        // Validate path exists, create directory if needed
         if !path.exists() {
             create_dir_all(path).map_err(|e| UiError {
                 name: "create_dir_failed".into(),
@@ -423,17 +468,13 @@ pub fn reveal_in_file_explorer(path: String) -> Result<String, UiError> {
             })?;
         }
 
-        // Try xdg-open for general desktops.
-        // For files, most DEs open the default app; to "reveal", try the folder.
         let target = if path.is_file() {
             path.parent().unwrap_or(Path::new("/"))
         } else {
             path
         };
-        // Prefer xdg-open; fall back to common file managers if needed.
         let status = Command::new("xdg-open").arg(target).status();
         if status.is_err() || !status.unwrap().success() {
-            // Try common file managers
             let fm_cmds = [
                 (
                     "nautilus",
@@ -503,7 +544,6 @@ pub fn remove_installation(app: AppHandle, id: i64) -> Result<String, UiError> {
     if let Some(idx) = index {
         let installation = &installations_array[idx];
         let path = installation["path"].as_str().unwrap_or("");
-        // Remove the installation directory
         let pb = PathBuf::from(path);
         if pb.exists() && pb.is_dir() {
             remove_dir_all(&pb).map_err(|e| UiError {
