@@ -42,6 +42,7 @@ export type DialogMap = {
 	ImportModsJsonDialog: ImportModsJsonDialogProps;
 	SaveModProfileDialog: SaveModProfileDialogProps;
 	RestoreWorldDialog: RestoreWorldDialogProps;
+	ImportModsByServerDialog: ImportModsDialogProps;
 };
 
 type DialogKey = keyof DialogMap;

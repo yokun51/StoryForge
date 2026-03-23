@@ -260,20 +260,12 @@ pub async fn add_mod_to_installation(path: String, url: String) -> Result<String
     Ok("added".into())
 }
 
-#[command]
-pub fn get_mods(path: String) -> Result<ModsResult, UiError> {
-    let mods_path = PathBuf::from(path).join("Mods");
-    if !mods_path.exists() || !mods_path.is_dir() {
-        return Err(UiError {
-            name: "not_found".into(),
-            message: mods_path.to_string_lossy().into_owned(),
-        });
-    }
-
+// --- Helper pour extraire les mods depuis un dossier arbitraire ---
+fn extract_mods_from_dir(mods_path: &Path) -> Result<ModsResult, UiError> {
     let mut mods: Vec<OutputMod> = Vec::new();
     let mut errors: Vec<ModError> = Vec::new();
 
-    let read_dir = match read_dir(&mods_path) {
+    let read_dir_iter = match read_dir(mods_path) {
         Ok(rd) => rd,
         Err(e) => {
             return Err(UiError {
@@ -287,7 +279,7 @@ pub fn get_mods(path: String) -> Result<ModsResult, UiError> {
         }
     };
 
-    for entry_res in read_dir {
+    for entry_res in read_dir_iter {
         let entry = match entry_res {
             Ok(e) => e,
             Err(e) => {
@@ -479,6 +471,117 @@ pub fn get_mods(path: String) -> Result<ModsResult, UiError> {
     }
 
     Ok(ModsResult { mods, errors })
+}
+
+#[command]
+pub fn get_mods(path: String) -> Result<ModsResult, UiError> {
+    let mods_path = PathBuf::from(path).join("Mods");
+    if !mods_path.exists() || !mods_path.is_dir() {
+        return Err(UiError {
+            name: "not_found".into(),
+            message: mods_path.to_string_lossy().into_owned(),
+        });
+    }
+    extract_mods_from_dir(&mods_path)
+}
+
+#[command]
+pub fn get_mods_by_server_folders(path: String) -> Result<Vec<String>, UiError> {
+    let clean_path = path.trim_matches('"').trim();
+    let mbs_path = std::path::PathBuf::from(clean_path).join("ModsByServer");
+
+    // S'il n'existe pas ou n'est pas un dossier, on renvoie juste une liste vide (pas d'erreur)
+    if !mbs_path.exists() || !mbs_path.is_dir() {
+        return Ok(vec![]);
+    }
+
+    let mut folders = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(&mbs_path) {
+        for entry in entries.flatten() {
+            if entry.path().is_dir() {
+                if let Some(name) = entry.file_name().to_str() {
+                    folders.push(name.to_string());
+                }
+            }
+        }
+    }
+
+    Ok(folders)
+}
+
+#[command]
+pub fn get_server_mods(path: String, server_folder: String) -> Result<ModsResult, UiError> {
+    let mods_path = std::path::PathBuf::from(path)
+        .join("ModsByServer")
+        .join(server_folder);
+
+    // Si le dossier du serveur a été supprimé (par ex. après un import réussi), on renvoie 0 mods
+    if !mods_path.exists() || !mods_path.is_dir() {
+        return Ok(ModsResult {
+            mods: vec![],
+            errors: vec![],
+        });
+    }
+
+    extract_mods_from_dir(&mods_path)
+}
+
+#[command]
+pub fn move_server_mods(
+    path: String,
+    server_folder: String,
+    filenames_to_move: Vec<String>,
+    filenames_to_delete: Vec<String>,
+) -> Result<usize, UiError> {
+    let base_path = std::path::PathBuf::from(&path);
+    let source_dir = base_path.join("ModsByServer").join(&server_folder);
+    let target_dir = base_path.join("Mods");
+
+    if !target_dir.exists() {
+        std::fs::create_dir_all(&target_dir)
+            .map_err(|e| UiError::from(format!("Create dir error: {e}")))?;
+    }
+
+    let mut moved_count = 0;
+
+    // 1. Supprimer les fichiers inutiles (déjà présents avec la bonne version ou ignorés)
+    for filename in filenames_to_delete {
+        let source_file = source_dir.join(&filename);
+        if source_file.exists() && source_file.is_file() {
+            std::fs::remove_file(&source_file).ok();
+        }
+    }
+
+    // 2. Déplacer les fichiers sélectionnés
+    for filename in filenames_to_move {
+        let source_file = source_dir.join(&filename);
+        let target_file = target_dir.join(&filename);
+        if source_file.exists() && source_file.is_file() {
+            // Remplace l'existant s'il y a lieu
+            if target_file.exists() {
+                std::fs::remove_file(&target_file).ok();
+            }
+            // Tente de renommer, sinon copie puis supprime (utile si disques différents)
+            if std::fs::rename(&source_file, &target_file)
+                .or_else(|_| {
+                    std::fs::copy(&source_file, &target_file)
+                        .and_then(|_| std::fs::remove_file(&source_file))
+                })
+                .is_ok()
+            {
+                moved_count += 1;
+            }
+        }
+    }
+
+    // 3. Supprimer le dossier du serveur s'il est vide après le transfert
+    if let Ok(entries) = std::fs::read_dir(&source_dir) {
+        if entries.count() == 0 {
+            std::fs::remove_dir(&source_dir).ok();
+        }
+    }
+
+    Ok(moved_count)
 }
 
 #[command]

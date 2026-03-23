@@ -23,6 +23,7 @@ import { EditServerDialog } from "@/components/dialogs/editserver.dialog";
 import { EditWorldDialog } from "@/components/dialogs/editworld.dialog";
 import { ImportInstallationDialog } from "@/components/dialogs/importinstallation.dialog";
 import { ImportModsDialog } from "@/components/dialogs/importmods.dialog";
+import { ImportModsByServerDialog } from "@/components/dialogs/importmodsbyserver.dialog";
 import { ImportModsJsonDialog } from "@/components/dialogs/importmodsjson.dialog";
 import { RemoveModDialog } from "@/components/dialogs/removemod.dialog";
 import { RestoreWorldDialog } from "@/components/dialogs/restoreworld.dialog";
@@ -208,6 +209,14 @@ function RootComponent() {
 					{...((active?.key === "ImportModsJsonDialog"
 						? active.props
 						: {}) as DialogMap["ImportModsJsonDialog"])}
+				/>
+			)}
+			{active?.key === "ImportModsByServerDialog" && (
+				<ImportModsByServerDialog
+					open={active?.key === "ImportModsByServerDialog"}
+					{...((active?.key === "ImportModsByServerDialog"
+						? active.props
+						: {}) as DialogMap["ImportModsByServerDialog"])}
 				/>
 			)}
 			{active?.key === "SaveModProfileDialog" && (

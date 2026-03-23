@@ -4,6 +4,7 @@ import {
 	FileJsonIcon,
 	FolderDownIcon,
 	SaveIcon,
+	ServerIcon,
 	TrashIcon,
 } from "lucide-react";
 import { useMemo, useRef } from "react";
@@ -468,6 +469,17 @@ function RouteComponent() {
 				>
 					<FileJsonIcon className="w-4 h-4 mr-2" />
 					Smart Import
+				</Button>
+
+				<Button
+					className="h-9 ml-2"
+					onClick={() =>
+						openDialog("ImportModsByServerDialog", { installation })
+					}
+					variant="outline"
+				>
+					<ServerIcon className="w-4 h-4 mr-2" />
+					Import from Server
 				</Button>
 
 				{side === "installed" && instMods && (

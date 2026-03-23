@@ -51,6 +51,9 @@ pub fn run() {
             mods::set_disabled_mods,
             mods::get_locked_mods,
             mods::toggle_mod_lock,
+            mods::get_mods_by_server_folders,
+            mods::get_server_mods,
+            mods::move_server_mods,
             // Download
             download::get_download_links,
             download::get_download_link,
